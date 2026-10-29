@@ -37,7 +37,9 @@ Add an optional vocabulary-learning workflow to the existing screen translator. 
 
 ## Work in this branch
 
-This branch introduces the Claude project instructions and a Qt-free SQLite storage foundation with tests. It does not yet integrate the store into the application UI or translation pipeline. Before calling the feature complete, verify implementation files and run the focused suite and project validation locally.
+This branch introduces the Claude project instructions, this handoff, and a Qt-free SQLite storage foundation with tests. It does not yet integrate the store into the application UI or translation pipeline. The design and QA checklist is documented in [`docs/vocabulary-learning-plan.md`](docs/vocabulary-learning-plan.md).
+
+Review notes before feature completion: the storage cap uses a count-then-insert flow, so concurrent writes near the 10,000-entry limit need a concurrency test; current schema initialization should be tested against malformed existing tables, not only a newer `user_version`. These are review/test follow-ups, not confirmed runtime failures. Local execution is unavailable in the present tool session; use the repository's Windows CI on a draft PR and inspect the actual run result.
 
 ## Next steps
 
@@ -45,7 +47,7 @@ This branch introduces the Claude project instructions and a Qt-free SQLite stor
 2. Integrate a contextual lookup service in `claude/02-contextual-lookup` without changing approved glossary behavior.
 3. Build the learning panel in `claude/03-learning-panel`, with explicit save/delete and clear empty/error states.
 4. In `claude/04-tests-and-docs`, cover the real user journey, update `docs/privacy.md` and user-facing documentation, then run the full prescribed checks.
-5. Open a pull request to `main` only after the user reviews the combined change.
+5. Use a draft PR if needed to exercise CI without merging. Ask the user to review the combined change before any merge to `main`.
 
 ## Definition of done
 

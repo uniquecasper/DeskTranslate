@@ -14,6 +14,14 @@ Updated: 2026-10-29
   4. `claude/04-tests-and-docs` — end-to-end regressions, product/privacy documentation, and final integration.
 - The branches were initially created at the same baseline commit; do not assume work exists on a later branch unless it is present in its tree/history.
 
+## Responsibility split and stage gate
+
+- **ChatGPT (project coordination, non-coding):** owns feature scope, product requirements, architecture/branch sequencing, privacy and acceptance criteria, non-code documentation, handoff notes for Claude Code, PR/check-status tracking, and review of reported test results/diffs. It must not author or edit application implementation code or test code going forward.
+- **Claude Code (implementation):** owns application code, test code, code-level fixes, and implementation-specific validation. It must read this handoff and `CLAUDE.md` before each task, work only on the assigned feature branch, and report exact commands/results without claiming unrun checks.
+- **User/maintainer:** decides when to hand a task to Claude Code and whether changes are accepted/merged. Never merge to `main` automatically.
+- When the non-coding scope, requirements, branch/task, and acceptance criteria are ready, ChatGPT tells the user explicitly: **“Claude’un sırası geldi”** and provides a focused copy/paste task for Claude Code.
+- The next Claude task is **not** the contextual lookup implementation yet. First Claude should review and verify the existing storage foundation in `claude/01-vocabulary-storage`, address any code-level defects, and run the focused tests plus the repository validation available to it. After results are reviewed, ChatGPT will prepare the next task/branch handoff.
+
 ## Product intent
 
 Add an optional vocabulary-learning workflow to the existing screen translator. A user should be able to explicitly save a recognized term and its displayed translation, review their saved items, and later use them as a learning aid. This complements the current glossary; it must not silently replace or mutate the approved glossary.

@@ -2,6 +2,14 @@
 
 Read `CLAUDE_HANDOFF.md` before making changes. It records the current vocabulary-learning workstream, branch sequence, and known limits.
 
+## Task ownership
+
+Read `CLAUDE_HANDOFF.md` for the current stage and assigned task.
+- Claude Code owns implementation changes: application code, tests, and code-level fixes.
+- Do not begin the next feature branch until the current storage task has been reviewed and its focused/full validation results are reported.
+- Keep each task on its assigned branch; never merge to `main` unless the maintainer explicitly approves.
+- Do not claim to have run tests without actual command output.
+
 ## Project shape
 
 - DeskTranslate is a Windows-first Python 3.12+ desktop application built with PySide6.

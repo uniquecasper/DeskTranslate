@@ -185,7 +185,6 @@ def test_fixed_source_language_is_preserved_without_extra_selection(headless_app
     dialog.deleteLater()
 
 
-
 def test_delete_selected_requires_explicit_confirmation(learning_page, monkeypatch):
     from PySide6.QtWidgets import QMessageBox
 

@@ -124,15 +124,14 @@ def test_lookup_scans_past_first_database_page(lookup_store):
     assert [match.entry for match in results] == [oldest]
 
 
-def test_lookup_joins_recent_source_lines_with_a_real_newline(lookup_store):
-    entry = lookup_store.add("red fox", "kızıl tilki", "en", "tr")
+def test_lookup_does_not_join_two_recent_dialogue_lines_into_one_term(lookup_store):
+    lookup_store.add(r"red\nfox", "tek satırlık terim", "en", "tr")
 
     results = VocabularyLookup(lookup_store).relevant(
-        "Nothing relevant here",
+        "No match in the current line",
         "en",
         "tr",
-        recent_sources=("A red", "fox crossed the path"),
+        recent_sources=("A red", "fox appeared"),
     )
 
-    assert [match.entry for match in results] == [entry]
-    assert not results[0].matched_current_text
+    assert results == ()

@@ -10,7 +10,7 @@ import json
 from dataclasses import dataclass
 
 from desktranslate.context import contains_term, folded
-from desktranslate.vocabulary import MAX_LIST_LIMIT, VocabularyEntry, VocabularyStore
+from desktranslate.vocabulary import MAX_ENTRIES, MAX_LIST_LIMIT, VocabularyEntry, VocabularyStore
 
 DEFAULT_RESULT_LIMIT = 24
 DEFAULT_RESULT_BYTES = 1_800
@@ -60,7 +60,7 @@ class VocabularyLookup:
         recent = folded("\\n".join(recent_sources[-2:]))
         matches: list[VocabularyMatch] = []
         offset = 0
-        while offset < 10_000:
+        while offset < MAX_ENTRIES:
             page = self._store.list_entries(
                 limit=MAX_LIST_LIMIT,
                 offset=offset,

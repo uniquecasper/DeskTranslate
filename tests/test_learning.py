@@ -183,3 +183,26 @@ def test_fixed_source_language_is_preserved_without_extra_selection(headless_app
     assert dialog.source_language_combo is None
     assert dialog.values() == ("hello", "merhaba", "en")
     dialog.deleteLater()
+
+
+
+def test_delete_selected_requires_explicit_confirmation(learning_page, monkeypatch):
+    from PySide6.QtWidgets import QMessageBox
+
+    page, store = learning_page
+    entry = store.add("hello", "merhaba", "en", "tr")
+    page.refresh()
+    page.table.selectRow(0)
+
+    decision = [QMessageBox.StandardButton.Cancel]
+    monkeypatch.setattr(QMessageBox, "question", lambda *_args, **_kwargs: decision[0])
+
+    page.delete_selected()
+    assert store.get(entry.id) == entry
+    assert page.table.rowCount() == 1
+
+    decision[0] = QMessageBox.StandardButton.Yes
+    page.delete_selected()
+    assert store.get(entry.id) is None
+    assert page.table.rowCount() == 0
+    assert page.match_count == 0

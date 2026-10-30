@@ -57,7 +57,7 @@ class VocabularyLookup:
             raise ValueError("Recent sources must be a tuple of text values.")
 
         current = folded(text)
-        recent = folded("\\n".join(recent_sources[-2:]))
+        recent = folded("\n".join(recent_sources[-2:]))
         matches: list[VocabularyMatch] = []
         offset = 0
         while offset < MAX_ENTRIES:

@@ -31,6 +31,17 @@ The hosted Windows candidate job completed successfully:
 
 The installer report also explicitly records `previous_version_upgrade: false`. The current workflow does not pass a `PreviousInstaller` to `tools/qualify_installer.ps1`; therefore the successful reinstall/lifecycle checks must not be described as a verified 2.0.0-to-2.0.1 upgrade.
 
+## Verified previous installer input
+
+The official upstream GitHub release API for [v2.0.0](https://github.com/DeskTranslate/DeskTranslate/releases/tag/v2.0.0)
+lists the previous setup asset with this identity:
+
+- Asset: `DeskTranslate-2.0.0-Setup-x64.exe`
+- Official download: https://github.com/DeskTranslate/DeskTranslate/releases/download/v2.0.0/DeskTranslate-2.0.0-Setup-x64.exe
+- GitHub release-asset digest: `sha256:2c2aab018c7e34b38fe4b04f3ffb099c6707fbd63d14dbd21546effe43443fe5`
+
+Use this exact file as `PreviousInstaller` input and verify the downloaded bytes against that digest before executing it. The asset listing establishes the expected release-asset digest; it does not mean the 2.0.1 upgrade has already been run.
+
 ## Gates not completed for 2.0.1
 
 1. **Two-hour steady endurance:** skipped in run 41140156640 because the workflow's `endurance` input was false.

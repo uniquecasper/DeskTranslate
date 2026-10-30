@@ -49,7 +49,7 @@ from desktranslate.pipeline import Pipeline
 from desktranslate.presentation import session_presentation
 from desktranslate.providers import SPECS, create_provider
 from desktranslate.security import CredentialStore, is_loopback_endpoint, validate_endpoint
-from desktranslate.settings import Settings, SettingsStore
+from desktranslate.settings import Settings, SettingsStore, data_dir
 from desktranslate.ui.glossary import editor_content, exchange_controls, parse_editor
 from desktranslate.ui.jobs import Jobs
 from desktranslate.ui.onboarding import Onboarding
@@ -796,10 +796,8 @@ class MainWindow(QMainWindow):
         if not translation or translation == "A little window into another language.":
             self.notice("There is no translation to save yet.")
             return
-        source_cursor = self.result_source
-        translation_cursor = self.result_translation
-        source_selected = source_cursor.textCursor().selectedText().strip()
-        translation_selected = translation_cursor.textCursor().selectedText().strip()
+        source_selected = self.result_source.selectedText().strip()
+        translation_selected = self.result_translation.selectedText().strip()
         if not source_selected or not translation_selected:
             self.notice("Select a source term and its matching translation before saving.")
             return

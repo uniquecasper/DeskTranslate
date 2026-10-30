@@ -47,6 +47,7 @@ def test_learning_page_paginates_and_returns_to_previous_page(learning_page):
     page, store = learning_page
     for index in range(125):
         store.add(f"term-{index}", f"translation-{index}", "en", "tr")
+    page.refresh()
 
     assert page.table.rowCount() == 100
     assert page.next_button.isEnabled()

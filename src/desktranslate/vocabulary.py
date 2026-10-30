@@ -147,8 +147,7 @@ def _validate_schema(connection: sqlite3.Connection) -> None:
     normalized_sql = " ".join(table_sql.upper().split())
     has_expected_checks = (
         f"CHECK (LENGTH(SOURCE) BETWEEN 1 AND {MAX_SOURCE_CHARS})" in normalized_sql
-        and f"CHECK (LENGTH(TRANSLATION) BETWEEN 1 AND {MAX_TRANSLATION_CHARS})"
-        in normalized_sql
+        and f"CHECK (LENGTH(TRANSLATION) BETWEEN 1 AND {MAX_TRANSLATION_CHARS})" in normalized_sql
     )
     has_autoincrement = "ID INTEGER PRIMARY KEY AUTOINCREMENT" in normalized_sql
 

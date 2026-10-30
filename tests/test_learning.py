@@ -150,7 +150,7 @@ def test_result_labels_keep_both_mouse_selections_until_save_click(headless_appl
     headless_application.processEvents()
 
 
-def test_auto_source_language_requires_a_specific_choice(headless_application):
+def test_auto_source_language_requires_a_specific_choice(headless_application, tmp_path):
     from PySide6.QtWidgets import QDialogButtonBox
 
     dialog = VocabularySaveDialog("猫", "cat", "auto", "en")
@@ -168,7 +168,12 @@ def test_auto_source_language_requires_a_specific_choice(headless_application):
     dialog.source_language_combo.setCurrentIndex(language_index)
 
     assert save_button.isEnabled()
-    assert dialog.values() == ("猫", "cat", "ja")
+    source, translation, source_language = dialog.values()
+    entry = VocabularyStore(tmp_path / "vocabulary.sqlite3").add(
+        source, translation, source_language, "en"
+    )
+    assert entry.source_language == "ja"
+    assert entry.target_language == "en"
     dialog.deleteLater()
 
 

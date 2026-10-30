@@ -1,5 +1,9 @@
 name: Build release candidate
 on:
+  # Build an installer and portable candidate automatically for this versioned branch only.
+  push:
+    branches:
+      - claude/windows-installer-2-0-1
   workflow_dispatch:
     inputs:
       tag:

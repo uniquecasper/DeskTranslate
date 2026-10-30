@@ -95,6 +95,7 @@ class LearningPage(QWidget):
         self.page_number = 0
         self.match_count = 0
         self.total_count = 0
+        self._loaded = False
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -161,6 +162,12 @@ class LearningPage(QWidget):
         self.next_button.clicked.connect(self.next_page)
         self.delete_button.clicked.connect(self.delete_selected)
 
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        if not self._loaded:
+            self.refresh()
+            self._loaded = True
+
     @property
     def store(self) -> VocabularyStore:
         if self._store is None:
@@ -226,6 +233,7 @@ class LearningPage(QWidget):
 
             self.total_count = total
             self.match_count = matches
+            self._loaded = True
             if page_start and not visible and page_start >= matches:
                 self.page_number = max(0, (matches - 1) // self.PAGE_SIZE)
                 self.refresh()

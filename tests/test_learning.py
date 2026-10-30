@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import pytest
 
-from desktranslate.ui.learning import (\n    LearningPage,\n    VocabularySaveDialog,\n)
+from desktranslate.ui.learning import (
+    LearningPage,
+    VocabularySaveDialog,
+)
 from desktranslate.vocabulary import VocabularyStore
 
 pytestmark = pytest.mark.headless_ui
@@ -145,7 +148,6 @@ def test_result_labels_keep_both_mouse_selections_until_save_click(headless_appl
     host.close()
     host.deleteLater()
     headless_application.processEvents()
-
 
 
 def test_auto_source_language_requires_a_specific_choice(headless_application):

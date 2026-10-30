@@ -14,9 +14,7 @@ def test_lookup_returns_current_text_matches_for_exact_language_pair(lookup_stor
     hallo = lookup_store.add("hallo", "merhaba", "de", "tr")
     other_direction = lookup_store.add("hello", "bonjour", "en", "fr")
 
-    results = VocabularyLookup(lookup_store).relevant(
-        "She said HELLO!", "en", "tr"
-    )
+    results = VocabularyLookup(lookup_store).relevant("She said HELLO!", "en", "tr")
 
     assert [match.entry for match in results] == [hello]
     assert results[0].matched_current_text

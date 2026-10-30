@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from desktranslate.ui.learning import LearningPage
+from desktranslate.ui.learning import (\n    LearningPage,\n    VocabularySaveDialog,\n)
 from desktranslate.vocabulary import VocabularyStore
 
 pytestmark = pytest.mark.headless_ui
@@ -145,3 +145,34 @@ def test_result_labels_keep_both_mouse_selections_until_save_click(headless_appl
     host.close()
     host.deleteLater()
     headless_application.processEvents()
+
+
+
+def test_auto_source_language_requires_a_specific_choice(headless_application):
+    from PySide6.QtWidgets import QDialogButtonBox
+
+    dialog = VocabularySaveDialog("猫", "cat", "auto", "en")
+
+    assert dialog.source_language_combo is not None
+    assert dialog.values() == ("猫", "cat", "")
+    buttons = dialog.findChild(QDialogButtonBox)
+    assert buttons is not None
+    save_button = buttons.button(QDialogButtonBox.StandardButton.Save)
+    assert save_button is not None
+    assert not save_button.isEnabled()
+
+    language_index = dialog.source_language_combo.findData("ja")
+    assert language_index > 0
+    dialog.source_language_combo.setCurrentIndex(language_index)
+
+    assert save_button.isEnabled()
+    assert dialog.values() == ("猫", "cat", "ja")
+    dialog.deleteLater()
+
+
+def test_fixed_source_language_is_preserved_without_extra_selection(headless_application):
+    dialog = VocabularySaveDialog("hello", "merhaba", "en", "tr")
+
+    assert dialog.source_language_combo is None
+    assert dialog.values() == ("hello", "merhaba", "en")
+    dialog.deleteLater()

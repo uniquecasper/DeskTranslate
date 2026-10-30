@@ -827,7 +827,7 @@ class MainWindow(QMainWindow):
         )
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
-        source_value, translation_value = dialog.values()
+        source_value, translation_value, source_language = dialog.values()
         try:
             from desktranslate.vocabulary import VocabularyStore
 
@@ -835,7 +835,7 @@ class MainWindow(QMainWindow):
             store.add(
                 source_value,
                 translation_value,
-                self.settings.source,
+                source_language,
                 self.settings.target,
             )
             if hasattr(self, "learning_page"):

@@ -50,16 +50,34 @@ class VocabularySaveDialog(QDialog):
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
+        self._source_language = source_language
         self.setWindowTitle("Save vocabulary pair")
         self.setMinimumWidth(420)
         layout = QVBoxLayout(self)
-        layout.addWidget(
-            QLabel(
+        if source_language == "auto":
+            language_summary = (
+                f"Local vocabulary · Auto → {target_language}\n"
+                "OCR used automatic source detection. Choose the actual source language below."
+            )
+        else:
+            language_summary = (
                 f"Local vocabulary · {source_language} → {target_language}\n"
                 "Review both selected terms before saving."
             )
-        )
+        layout.addWidget(QLabel(language_summary))
+
         form = QFormLayout()
+        self.source_language_combo: QComboBox | None = None
+        if source_language == "auto":
+            source_language_combo = QComboBox()
+            source_language_combo.addItem("Choose source language…", "")
+            for language in LANGUAGES:
+                if language.code != "auto":
+                    source_language_combo.addItem(language.name, language.code)
+            source_language_combo.setAccessibleName("Actual source language")
+            self.source_language_combo = source_language_combo
+            form.addRow("Actual source language", source_language_combo)
+
         self.source_edit = QLineEdit(source)
         self.source_edit.setMaxLength(MAX_SOURCE_CHARS)
         self.source_edit.setAccessibleName("Source vocabulary term")
@@ -72,12 +90,30 @@ class VocabularySaveDialog(QDialog):
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel
         )
+        save_button = buttons.button(QDialogButtonBox.StandardButton.Save)
+        assert save_button is not None
+        if self.source_language_combo is not None:
+            source_language_combo = self.source_language_combo
+            save_button.setEnabled(False)
+            source_language_combo.currentIndexChanged.connect(
+                lambda _index: save_button.setEnabled(
+                    isinstance(source_language_combo.currentData(), str)
+                    and bool(source_language_combo.currentData())
+                )
+            )
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
 
-    def values(self) -> tuple[str, str]:
-        return self.source_edit.text(), self.translation_edit.text()
+    def values(self) -> tuple[str, str, str]:
+        """Return the edited terms and a specific, storable source language."""
+        if self.source_language_combo is None:
+            source_language = self._source_language
+        else:
+            source_language = self.source_language_combo.currentData()
+        if not isinstance(source_language, str) or not source_language:
+            source_language = ""
+        return self.source_edit.text(), self.translation_edit.text(), source_language
 
 
 class LearningPage(QWidget):

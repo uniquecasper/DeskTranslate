@@ -416,9 +416,7 @@ class MainWindow(QMainWindow):
         self.session_status.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         self.statusBar().addPermanentWidget(self.session_status, 1)
         self.result_source = label("Recognized text appears here.", "muted", selectable=True)
-        self.result_translation = label(
-            "A little window into another language.", selectable=True
-        )
+        self.result_translation = label("A little window into another language.", selectable=True)
         self.result_translation.setStyleSheet("font-size: 23px; font-weight: 550;")
         layout.addWidget(self.status_label)
         layout.addWidget(self.result_source)

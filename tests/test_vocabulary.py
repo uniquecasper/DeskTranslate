@@ -604,6 +604,7 @@ def test_validation_errors_stay_value_errors_and_store_errors_are_runtime_errors
     assert not issubclass(VocabularyStoreError, ValueError)
     assert issubclass(VocabularyStoreError, RuntimeError)
 
+
 @pytest.mark.parametrize(
     "statements",
     [

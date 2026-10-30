@@ -667,4 +667,3 @@ def test_current_version_schema_missing_required_constraints_is_rejected_unchang
         VocabularyStore(path)
 
     assert path.read_bytes() == before
-

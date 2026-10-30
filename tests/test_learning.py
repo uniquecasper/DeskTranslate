@@ -192,7 +192,7 @@ def test_delete_selected_requires_explicit_confirmation(learning_page, monkeypat
     page, store = learning_page
     entry = store.add("hello", "merhaba", "en", "tr")
     page.refresh()
-    page.table.selectRow(0)
+    page.table.setCurrentCell(0, 0)
 
     decision = [QMessageBox.StandardButton.Cancel]
     monkeypatch.setattr(QMessageBox, "question", lambda *_args, **_kwargs: decision[0])

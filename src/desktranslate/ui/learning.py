@@ -9,6 +9,7 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QShowEvent
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
@@ -162,7 +163,7 @@ class LearningPage(QWidget):
         self.next_button.clicked.connect(self.next_page)
         self.delete_button.clicked.connect(self.delete_selected)
 
-    def showEvent(self, event) -> None:
+    def showEvent(self, event: QShowEvent) -> None:
         super().showEvent(event)
         if not self._loaded:
             self.refresh()

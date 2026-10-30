@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from PySide6.QtCore import QSize, Qt, QTimer, QUrl
-from PySide6.QtGui import QAction, QCloseEvent, QDesktopServices, QResizeEvent
+from PySide6.QtGui import QAction, QCloseEvent, QDesktopServices, QFocusEvent, QResizeEvent
 from PySide6.QtWidgets import (
     QApplication,
     QBoxLayout,
@@ -49,7 +49,7 @@ from desktranslate.pipeline import Pipeline
 from desktranslate.presentation import session_presentation
 from desktranslate.providers import SPECS, create_provider
 from desktranslate.security import CredentialStore, is_loopback_endpoint, validate_endpoint
-from desktranslate.settings import Settings, SettingsStore
+from desktranslate.settings import Settings, SettingsStore, data_dir
 from desktranslate.ui.glossary import editor_content, exchange_controls, parse_editor
 from desktranslate.ui.jobs import Jobs
 from desktranslate.ui.onboarding import Onboarding
@@ -65,8 +65,29 @@ from desktranslate.window_capture import (
 )
 
 
-def label(text: str, kind: str = "") -> QLabel:
-    widget = QLabel(text)
+class SelectableLabel(QLabel):
+    """A word-selectable result label that retains selection until its text changes."""
+
+    def __init__(self, text: str, parent: QWidget | None = None) -> None:
+        super().__init__(text, parent)
+        self.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+
+    def focusOutEvent(self, event: QFocusEvent) -> None:
+        selection_start = self.selectionStart()
+        selected_text = self.selectedText()
+        super().focusOutEvent(event)
+        if selection_start >= 0 and selected_text:
+            # QLabel selection positions use UTF-16 code units, as does QString.
+            selected_length = len(selected_text.encode("utf-16-le", "surrogatepass")) // 2
+            self.setSelection(selection_start, selected_length)
+
+    def setText(self, text: str) -> None:
+        super().setText(text)
+        self.setSelection(0, 0)
+
+
+def label(text: str, kind: str = "", *, selectable: bool = False) -> QLabel:
+    widget = SelectableLabel(text) if selectable else QLabel(text)
     widget.setTextFormat(Qt.TextFormat.PlainText)
     widget.setWordWrap(True)
     if kind:
@@ -186,6 +207,7 @@ class MainWindow(QMainWindow):
                 "Preferences",
                 "Session",
                 "Diagnostics",
+                "Learning",
             ]
         )
         self.navigation.setAccessibleName("Navigation")
@@ -214,6 +236,7 @@ class MainWindow(QMainWindow):
         self.build_preferences()
         self.build_transcript()
         self.build_diagnostics()
+        self.build_learning()
         for control in self.findChildren(QComboBox):
             control.setSizeAdjustPolicy(
                 QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
@@ -392,12 +415,9 @@ class MainWindow(QMainWindow):
         self.session_status.setMinimumWidth(0)
         self.session_status.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         self.statusBar().addPermanentWidget(self.session_status, 1)
-        self.result_source = label("Recognized text appears here.", "muted")
-        self.result_translation = label("A little window into another language.")
+        self.result_source = label("Recognized text appears here.", "muted", selectable=True)
+        self.result_translation = label("A little window into another language.", selectable=True)
         self.result_translation.setStyleSheet("font-size: 23px; font-weight: 550;")
-        self.result_translation.setTextInteractionFlags(
-            Qt.TextInteractionFlag.TextSelectableByMouse
-        )
         layout.addWidget(self.status_label)
         layout.addWidget(self.result_source)
         layout.addWidget(self.result_translation)
@@ -764,6 +784,65 @@ class MainWindow(QMainWindow):
         elif hasattr(self, "glossary_scope"):
             self.update_provider_info()
         return True
+
+    def build_learning(self) -> None:
+        from desktranslate.ui.learning import LearningPage
+        from desktranslate.vocabulary import VocabularyStore
+
+        page = self.page(
+            "Learn the words you choose.",
+            "Saved vocabulary stays on this device. Nothing is saved automatically or sent to a provider.",
+        )
+        self.learning_page = LearningPage(
+            lambda: VocabularyStore(data_dir() / "vocabulary.sqlite3")
+        )
+        row = QHBoxLayout()
+        row.addWidget(button("Save selected words", self.save_selected_vocabulary, True))
+        row.addStretch()
+        page.addLayout(row)
+        page.addWidget(self.learning_page, 1)
+
+    def save_selected_vocabulary(self) -> None:
+        from desktranslate.ui.learning import VocabularySaveDialog
+
+        source = self.result_source.text().strip()
+        translation = self.result_translation.text().strip()
+        if not source or source == "Recognized text appears here.":
+            self.notice("Translate text first, then select the source term.")
+            return
+        if not translation or translation == "A little window into another language.":
+            self.notice("There is no translation to save yet.")
+            return
+        source_selected = self.result_source.selectedText().strip()
+        translation_selected = self.result_translation.selectedText().strip()
+        if not source_selected or not translation_selected:
+            self.notice("Select a source term and its matching translation before saving.")
+            return
+        dialog = VocabularySaveDialog(
+            source_selected,
+            translation_selected,
+            self.settings.source,
+            self.settings.target,
+            self,
+        )
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        source_value, translation_value, source_language = dialog.values()
+        try:
+            from desktranslate.vocabulary import VocabularyStore
+
+            store = VocabularyStore(data_dir() / "vocabulary.sqlite3")
+            store.add(
+                source_value,
+                translation_value,
+                source_language,
+                self.settings.target,
+            )
+            if hasattr(self, "learning_page"):
+                self.learning_page.refresh()
+            self.notice("Vocabulary pair saved locally.")
+        except (OSError, ValueError, RuntimeError):
+            self.notice("The vocabulary pair could not be saved. No data was sent online.")
 
     def build_diagnostics(self) -> None:
         from desktranslate.ui.support import SupportPage

@@ -82,3 +82,66 @@ def test_empty_search_and_language_filter_can_be_cleared(learning_page):
 
     page.source_filter.setCurrentIndex(0)
     assert page.match_count == 2
+
+
+def _double_click_word(widget, word: str) -> None:
+    from PySide6.QtCore import QPoint, Qt
+    from PySide6.QtGui import QFontMetrics
+    from PySide6.QtTest import QTest
+
+    start = widget.text().index(word)
+    metrics = QFontMetrics(widget.font())
+    x = metrics.horizontalAdvance(widget.text()[:start]) + max(
+        1, metrics.horizontalAdvance(word) // 2
+    )
+    QTest.mouseDClick(
+        widget,
+        Qt.MouseButton.LeftButton,
+        pos=QPoint(x, widget.height() // 2),
+    )
+
+
+def test_result_labels_keep_both_mouse_selections_until_save_click(headless_application):
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QPushButton, QVBoxLayout, QWidget
+
+    from desktranslate.ui.window import SelectableLabel
+
+    host = QWidget()
+    layout = QVBoxLayout(host)
+    source = SelectableLabel("hello world")
+    translation = SelectableLabel("merhaba dunya")
+    save_button = QPushButton("Save")
+    for widget in (source, translation):
+        widget.setFixedSize(320, 48)
+        widget.setWordWrap(True)
+        layout.addWidget(widget)
+    layout.addWidget(save_button)
+    host.show()
+    headless_application.processEvents()
+
+    _double_click_word(source, "hello")
+    assert source.selectedText() == "hello"
+
+    # Selecting the translation moves focus away from the source label.
+    _double_click_word(translation, "merhaba")
+    assert source.selectedText() == "hello"
+    assert translation.selectedText() == "merhaba"
+
+    # Clicking Save moves focus away from the translation label too.
+    from PySide6.QtTest import QTest
+
+    QTest.mouseClick(save_button, Qt.MouseButton.LeftButton)
+    headless_application.processEvents()
+    assert source.selectedText() == "hello"
+    assert translation.selectedText() == "merhaba"
+
+    # A new OCR/translation result must not reuse stale selections.
+    source.setText("new source")
+    translation.setText("new translation")
+    assert not source.hasSelectedText()
+    assert not translation.hasSelectedText()
+
+    host.close()
+    host.deleteLater()
+    headless_application.processEvents()

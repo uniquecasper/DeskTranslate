@@ -603,3 +603,68 @@ def test_locked_database_fails_fast_with_a_store_error_and_recovers(path):
 def test_validation_errors_stay_value_errors_and_store_errors_are_runtime_errors():
     assert not issubclass(VocabularyStoreError, ValueError)
     assert issubclass(VocabularyStoreError, RuntimeError)
+
+@pytest.mark.parametrize(
+    "statements",
+    [
+        # Missing the source length constraint.
+        [
+            """
+            CREATE TABLE vocabulary_entries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                source TEXT NOT NULL,
+                translation TEXT NOT NULL CHECK (length(translation) BETWEEN 1 AND 2000),
+                source_language TEXT NOT NULL, target_language TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                UNIQUE (source_language, target_language, source, translation)
+            )
+            """,
+            """
+            CREATE INDEX idx_vocabulary_language_pair
+            ON vocabulary_entries (source_language, target_language, id DESC)
+            """,
+        ],
+        # IDs can be reused if AUTOINCREMENT is missing.
+        [
+            """
+            CREATE TABLE vocabulary_entries (
+                id INTEGER PRIMARY KEY,
+                source TEXT NOT NULL CHECK (length(source) BETWEEN 1 AND 500),
+                translation TEXT NOT NULL CHECK (length(translation) BETWEEN 1 AND 2000),
+                source_language TEXT NOT NULL, target_language TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                UNIQUE (source_language, target_language, source, translation)
+            )
+            """,
+            """
+            CREATE INDEX idx_vocabulary_language_pair
+            ON vocabulary_entries (source_language, target_language, id DESC)
+            """,
+        ],
+        # The expected language-pair index is part of the storage contract.
+        [
+            """
+            CREATE TABLE vocabulary_entries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                source TEXT NOT NULL CHECK (length(source) BETWEEN 1 AND 500),
+                translation TEXT NOT NULL CHECK (length(translation) BETWEEN 1 AND 2000),
+                source_language TEXT NOT NULL, target_language TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                UNIQUE (source_language, target_language, source, translation)
+            )
+            """,
+        ],
+    ],
+    ids=["missing-check", "missing-autoincrement", "missing-language-index"],
+)
+def test_current_version_schema_missing_required_constraints_is_rejected_unchanged(
+    path, statements
+):
+    _make_database(path, statements, SCHEMA_VERSION)
+    before = path.read_bytes()
+
+    with pytest.raises(VocabularyStoreError, match="expected schema"):
+        VocabularyStore(path)
+
+    assert path.read_bytes() == before
+

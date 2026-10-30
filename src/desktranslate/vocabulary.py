@@ -8,7 +8,8 @@ from __future__ import annotations
 
 import sqlite3
 import unicodedata
-from contextlib import closing
+from collections.abc import Iterator
+from contextlib import closing, contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -22,6 +23,31 @@ MAX_TRANSLATION_CHARS = 2_000
 MAX_SOURCE_BYTES = 2_000
 MAX_TRANSLATION_BYTES = 8_000
 MAX_LIST_LIMIT = 500
+DEFAULT_TIMEOUT_SECONDS = 5.0
+
+_SQLITE_MAX_INT = 2**63 - 1
+_TABLE = "vocabulary_entries"
+_UNIQUE_COLUMNS = ("source_language", "target_language", "source", "translation")
+# (name, declared type, NOT NULL, primary-key position) in table order.
+_EXPECTED_COLUMNS = (
+    ("id", "INTEGER", 0, 1),
+    ("source", "TEXT", 1, 0),
+    ("translation", "TEXT", 1, 0),
+    ("source_language", "TEXT", 1, 0),
+    ("target_language", "TEXT", 1, 0),
+    ("created_at", "TEXT", 1, 0),
+)
+# Line/paragraph separators break the single-line contract; bidi embedding,
+# override and isolate controls can make a saved term render as something else.
+_REJECTED_CATEGORIES = frozenset({"Cc", "Zl", "Zp"})
+_BIDI_CONTROLS = frozenset("\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069")
+
+
+class VocabularyStoreError(RuntimeError):
+    """The vocabulary database is unusable or a SQLite/file-system call failed.
+
+    Messages never contain saved terms. The original error is chained as the cause.
+    """
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,9 +65,18 @@ class VocabularyEntry:
 def _text(value: object, label: str, max_chars: int, max_bytes: int) -> str:
     if not isinstance(value, str):
         raise ValueError(f"{label} must be text.")
-    value = value.strip()
-    if not value or len(value) > max_chars or any(
-        unicodedata.category(character) == "Cc" for character in value
+    # Bound the work before normalizing; NFC changes length only by a small factor.
+    if len(value) > max_chars * 4:
+        raise ValueError(f"{label} is too large.")
+    # Canonically equivalent spellings (e.g. precomposed vs combining accents) are one term.
+    value = unicodedata.normalize("NFC", value).strip()
+    if (
+        not value
+        or len(value) > max_chars
+        or any(
+            unicodedata.category(character) in _REJECTED_CATEGORIES or character in _BIDI_CONTROLS
+            for character in value
+        )
     ):
         raise ValueError(f"{label} must be non-empty, single-line text within the size limit.")
     try:
@@ -59,6 +94,12 @@ def _language(value: object, label: str) -> str:
     return value
 
 
+def _entry_id(value: object) -> int:
+    if type(value) is not int or not 1 <= value <= _SQLITE_MAX_INT:
+        raise ValueError("Vocabulary entry id must be a positive integer.")
+    return value
+
+
 def _entry(row: sqlite3.Row) -> VocabularyEntry:
     return VocabularyEntry(
         id=int(row["id"]),
@@ -70,55 +111,120 @@ def _entry(row: sqlite3.Row) -> VocabularyEntry:
     )
 
 
+def _schema_version(connection: sqlite3.Connection) -> int:
+    version = int(connection.execute("PRAGMA user_version").fetchone()[0])
+    if version > SCHEMA_VERSION:
+        raise VocabularyStoreError(
+            "The vocabulary database was created by a newer DeskTranslate version."
+        )
+    if version < 0:
+        raise VocabularyStoreError("The vocabulary database has an invalid schema version.")
+    return version
+
+
+def _validate_schema(connection: sqlite3.Connection) -> None:
+    """Refuse (never repair) a database whose table is not the expected one."""
+    rows = connection.execute(
+        'SELECT name, type, "notnull", pk FROM pragma_table_info(?)', (_TABLE,)
+    ).fetchall()
+    actual = tuple((r["name"], str(r["type"]).upper(), r["notnull"], r["pk"]) for r in rows)
+    has_unique_key = any(
+        tuple(
+            column["name"]
+            for column in connection.execute(
+                "SELECT name FROM pragma_index_info(?) ORDER BY seqno", (index["name"],)
+            )
+        )
+        == _UNIQUE_COLUMNS
+        for index in connection.execute(
+            'SELECT name FROM pragma_index_list(?) WHERE "unique"', (_TABLE,)
+        )
+    )
+    if actual != _EXPECTED_COLUMNS or not has_unique_key:
+        raise VocabularyStoreError("The vocabulary database does not have the expected schema.")
+
+
 class VocabularyStore:
     """SQLite-backed vocabulary owned by the local user's app-data directory.
 
     Pass a dedicated path such as data_dir() / "vocabulary.sqlite3".
     Each operation opens its own short-lived connection so calls from UI/job
     code do not share a mutable sqlite connection across threads.
+
+    Failures of the database or file system surface as VocabularyStoreError;
+    invalid caller input surfaces as ValueError. Saved text is never logged.
     """
 
-    def __init__(self, path: Path | str) -> None:
+    def __init__(self, path: Path | str, *, timeout: float = DEFAULT_TIMEOUT_SECONDS) -> None:
         self.path = Path(path)
+        self._timeout = timeout
         self._initialize()
 
     def _connect(self) -> sqlite3.Connection:
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        connection = sqlite3.connect(self.path, timeout=5.0)
+        # isolation_level=None: transactions are explicit (BEGIN IMMEDIATE), never implicit.
+        connection = sqlite3.connect(self.path, timeout=self._timeout, isolation_level=None)
         connection.row_factory = sqlite3.Row
-        connection.execute("PRAGMA busy_timeout = 5000")
+        # Deleted vocabulary must not linger in free pages of the file.
+        connection.execute("PRAGMA secure_delete = ON")
         return connection
 
+    @contextmanager
+    def _session(self, *, write: bool = False) -> Iterator[sqlite3.Connection]:
+        """Yield a connection; a write session is one atomic, exclusive-writer transaction.
+
+        BEGIN IMMEDIATE takes the write lock before the first read, so a
+        check-then-insert sequence cannot interleave with another writer. On an
+        error the connection is closed without COMMIT, which rolls back.
+        """
+        try:
+            with closing(self._connect()) as connection:
+                if write:
+                    connection.execute("BEGIN IMMEDIATE")
+                yield connection
+                if write:
+                    connection.execute("COMMIT")
+        except (sqlite3.Error, OSError) as error:
+            raise VocabularyStoreError("The vocabulary database could not be accessed.") from error
+
     def _initialize(self) -> None:
-        with closing(self._connect()) as connection:
-            version = int(connection.execute("PRAGMA user_version").fetchone()[0])
-            if version > SCHEMA_VERSION:
-                raise RuntimeError(
-                    "The vocabulary database was created by a newer DeskTranslate version."
+        with self._session() as connection:
+            if _schema_version(connection) == SCHEMA_VERSION:
+                _validate_schema(connection)
+                return
+        with self._session(write=True) as connection:
+            # Re-check under the write lock: another process may have initialized it.
+            if _schema_version(connection) == SCHEMA_VERSION:
+                _validate_schema(connection)
+                return
+            foreign = connection.execute(
+                "SELECT 1 FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' LIMIT 1"
+            ).fetchone()
+            if foreign is not None:
+                # Version 0 with existing objects is some other application's database.
+                raise VocabularyStoreError("The file is not a DeskTranslate vocabulary database.")
+            connection.execute(
+                f"""
+                CREATE TABLE {_TABLE} (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    source TEXT NOT NULL
+                        CHECK (length(source) BETWEEN 1 AND {MAX_SOURCE_CHARS}),
+                    translation TEXT NOT NULL
+                        CHECK (length(translation) BETWEEN 1 AND {MAX_TRANSLATION_CHARS}),
+                    source_language TEXT NOT NULL,
+                    target_language TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    UNIQUE ({", ".join(_UNIQUE_COLUMNS)})
                 )
-            with connection:
-                connection.execute(
-                    """
-                    CREATE TABLE IF NOT EXISTS vocabulary_entries (
-                        id INTEGER PRIMARY KEY,
-                        source TEXT NOT NULL
-                            CHECK (length(source) BETWEEN 1 AND 500),
-                        translation TEXT NOT NULL
-                            CHECK (length(translation) BETWEEN 1 AND 2000),
-                        source_language TEXT NOT NULL,
-                        target_language TEXT NOT NULL,
-                        created_at TEXT NOT NULL,
-                        UNIQUE (source_language, target_language, source, translation)
-                    )
-                    """
-                )
-                connection.execute(
-                    """
-                    CREATE INDEX IF NOT EXISTS idx_vocabulary_language_pair
-                    ON vocabulary_entries (source_language, target_language, id DESC)
-                    """
-                )
-                connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+                """
+            )
+            connection.execute(
+                f"""
+                CREATE INDEX idx_vocabulary_language_pair
+                ON {_TABLE} (source_language, target_language, id DESC)
+                """
+            )
+            connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
 
     def add(
         self,
@@ -135,55 +241,43 @@ class VocabularyStore:
         source_language = _language(source_language, "Source language")
         target_language = _language(target_language, "Target language")
         created_at = datetime.now(UTC).isoformat(timespec="seconds")
+        key = (source_language, target_language, source, translation)
 
-        with closing(self._connect()) as connection:
-            with connection:
-                existing = connection.execute(
-                    """
-                    SELECT * FROM vocabulary_entries
-                    WHERE source_language = ? AND target_language = ?
-                        AND source = ? AND translation = ?
-                    """,
-                    (source_language, target_language, source, translation),
-                ).fetchone()
-                if existing is not None:
-                    return _entry(existing)
+        with self._session(write=True) as connection:
+            existing = connection.execute(
+                f"""
+                SELECT * FROM {_TABLE}
+                WHERE source_language = ? AND target_language = ?
+                    AND source = ? AND translation = ?
+                """,
+                key,
+            ).fetchone()
+            if existing is not None:
+                return _entry(existing)
 
-                count = int(
-                    connection.execute("SELECT COUNT(*) FROM vocabulary_entries").fetchone()[0]
-                )
-                if count >= MAX_ENTRIES:
-                    raise ValueError("The saved vocabulary limit has been reached.")
+            count = int(connection.execute(f"SELECT COUNT(*) FROM {_TABLE}").fetchone()[0])
+            if count >= MAX_ENTRIES:
+                raise ValueError("The saved vocabulary limit has been reached.")
 
-                connection.execute(
-                    """
-                    INSERT INTO vocabulary_entries (
-                        source, translation, source_language, target_language, created_at
-                    ) VALUES (?, ?, ?, ?, ?)
-                    ON CONFLICT (source_language, target_language, source, translation)
-                    DO NOTHING
-                    """,
-                    (source, translation, source_language, target_language, created_at),
-                )
-                row = connection.execute(
-                    """
-                    SELECT * FROM vocabulary_entries
-                    WHERE source_language = ? AND target_language = ?
-                        AND source = ? AND translation = ?
-                    """,
-                    (source_language, target_language, source, translation),
-                ).fetchone()
-                if row is None:
-                    raise RuntimeError("The saved vocabulary entry could not be read back.")
-                return _entry(row)
+            cursor = connection.execute(
+                f"""
+                INSERT INTO {_TABLE} (
+                    source_language, target_language, source, translation, created_at
+                ) VALUES (?, ?, ?, ?, ?)
+                """,
+                (*key, created_at),
+            )
+            row = connection.execute(
+                f"SELECT * FROM {_TABLE} WHERE id = ?", (cursor.lastrowid,)
+            ).fetchone()
+            if row is None:
+                raise VocabularyStoreError("The saved vocabulary entry could not be read back.")
+            return _entry(row)
 
     def get(self, entry_id: int) -> VocabularyEntry | None:
-        if type(entry_id) is not int or entry_id <= 0:
-            raise ValueError("Vocabulary entry id must be a positive integer.")
-        with closing(self._connect()) as connection:
-            row = connection.execute(
-                "SELECT * FROM vocabulary_entries WHERE id = ?", (entry_id,)
-            ).fetchone()
+        entry_id = _entry_id(entry_id)
+        with self._session() as connection:
+            row = connection.execute(f"SELECT * FROM {_TABLE} WHERE id = ?", (entry_id,)).fetchone()
             return _entry(row) if row is not None else None
 
     def list_entries(
@@ -194,10 +288,11 @@ class VocabularyStore:
         source_language: str | None = None,
         target_language: str | None = None,
     ) -> list[VocabularyEntry]:
+        """Newest first. An offset past the end returns an empty list."""
         if type(limit) is not int or not 1 <= limit <= MAX_LIST_LIMIT:
             raise ValueError(f"Limit must be between 1 and {MAX_LIST_LIMIT}.")
-        if type(offset) is not int or offset < 0:
-            raise ValueError("Offset must be a non-negative integer.")
+        if type(offset) is not int or not 0 <= offset <= MAX_ENTRIES:
+            raise ValueError(f"Offset must be an integer between 0 and {MAX_ENTRIES}.")
         clauses: list[str] = []
         params: list[str | int] = []
         if source_language is not None:
@@ -208,10 +303,10 @@ class VocabularyStore:
             params.append(_language(target_language, "Target language"))
         where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
 
-        with closing(self._connect()) as connection:
+        with self._session() as connection:
             rows = connection.execute(
                 f"""
-                SELECT * FROM vocabulary_entries{where}
+                SELECT * FROM {_TABLE}{where}
                 ORDER BY id DESC
                 LIMIT ? OFFSET ?
                 """,
@@ -220,17 +315,11 @@ class VocabularyStore:
             return [_entry(row) for row in rows]
 
     def delete(self, entry_id: int) -> bool:
-        if type(entry_id) is not int or entry_id <= 0:
-            raise ValueError("Vocabulary entry id must be a positive integer.")
-        with closing(self._connect()) as connection:
-            with connection:
-                cursor = connection.execute(
-                    "DELETE FROM vocabulary_entries WHERE id = ?", (entry_id,)
-                )
-                return cursor.rowcount > 0
+        entry_id = _entry_id(entry_id)
+        with self._session(write=True) as connection:
+            cursor = connection.execute(f"DELETE FROM {_TABLE} WHERE id = ?", (entry_id,))
+            return cursor.rowcount > 0
 
     def count(self) -> int:
-        with closing(self._connect()) as connection:
-            return int(
-                connection.execute("SELECT COUNT(*) FROM vocabulary_entries").fetchone()[0]
-            )
+        with self._session() as connection:
+            return int(connection.execute(f"SELECT COUNT(*) FROM {_TABLE}").fetchone()[0])

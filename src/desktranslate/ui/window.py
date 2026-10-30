@@ -186,6 +186,7 @@ class MainWindow(QMainWindow):
                 "Preferences",
                 "Session",
                 "Diagnostics",
+                "Learning",
             ]
         )
         self.navigation.setAccessibleName("Navigation")
@@ -214,6 +215,7 @@ class MainWindow(QMainWindow):
         self.build_preferences()
         self.build_transcript()
         self.build_diagnostics()
+        self.build_learning()
         for control in self.findChildren(QComboBox):
             control.setSizeAdjustPolicy(
                 QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
@@ -393,6 +395,7 @@ class MainWindow(QMainWindow):
         self.session_status.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         self.statusBar().addPermanentWidget(self.session_status, 1)
         self.result_source = label("Recognized text appears here.", "muted")
+        self.result_source.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         self.result_translation = label("A little window into another language.")
         self.result_translation.setStyleSheet("font-size: 23px; font-weight: 550;")
         self.result_translation.setTextInteractionFlags(
@@ -764,6 +767,67 @@ class MainWindow(QMainWindow):
         elif hasattr(self, "glossary_scope"):
             self.update_provider_info()
         return True
+
+    def build_learning(self) -> None:
+        from desktranslate.ui.learning import LearningPage
+        from desktranslate.vocabulary import VocabularyStore
+
+        page = self.page(
+            "Learn the words you choose.",
+            "Saved vocabulary stays on this device. Nothing is saved automatically or sent to a provider.",
+        )
+        self.learning_page = LearningPage(
+            lambda: VocabularyStore(data_dir() / "vocabulary.sqlite3")
+        )
+        row = QHBoxLayout()
+        row.addWidget(button("Save selected words", self.save_selected_vocabulary, True))
+        row.addStretch()
+        page.addLayout(row)
+        page.addWidget(self.learning_page, 1)
+
+    def save_selected_vocabulary(self) -> None:
+        from desktranslate.ui.learning import VocabularySaveDialog
+
+        source = self.result_source.text().strip()
+        translation = self.result_translation.text().strip()
+        if not source or source == "Recognized text appears here.":
+            self.notice("Translate text first, then select the source term.")
+            return
+        if not translation or translation == "A little window into another language.":
+            self.notice("There is no translation to save yet.")
+            return
+        source_cursor = self.result_source
+        translation_cursor = self.result_translation
+        source_selected = source_cursor.textCursor().selectedText().strip()
+        translation_selected = translation_cursor.textCursor().selectedText().strip()
+        if not source_selected or not translation_selected:
+            self.notice("Select a source term and its matching translation before saving.")
+            return
+        dialog = VocabularySaveDialog(
+            source_selected,
+            translation_selected,
+            self.settings.source,
+            self.settings.target,
+            self,
+        )
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        source_value, translation_value = dialog.values()
+        try:
+            from desktranslate.vocabulary import VocabularyStore
+
+            store = VocabularyStore(data_dir() / "vocabulary.sqlite3")
+            store.add(
+                source_value,
+                translation_value,
+                self.settings.source,
+                self.settings.target,
+            )
+            if hasattr(self, "learning_page"):
+                self.learning_page.refresh()
+            self.notice("Vocabulary pair saved locally.")
+        except (OSError, ValueError, RuntimeError):
+            self.notice("The vocabulary pair could not be saved. No data was sent online.")
 
     def build_diagnostics(self) -> None:
         from desktranslate.ui.support import SupportPage

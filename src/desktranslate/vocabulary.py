@@ -140,7 +140,42 @@ def _validate_schema(connection: sqlite3.Connection) -> None:
             'SELECT name FROM pragma_index_list(?) WHERE "unique"', (_TABLE,)
         )
     )
-    if actual != _EXPECTED_COLUMNS or not has_unique_key:
+    table_sql_row = connection.execute(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?", (_TABLE,)
+    ).fetchone()
+    table_sql = str(table_sql_row["sql"] or "") if table_sql_row is not None else ""
+    normalized_sql = " ".join(table_sql.upper().split())
+    has_expected_checks = (
+        f"CHECK (LENGTH(SOURCE) BETWEEN 1 AND {MAX_SOURCE_CHARS})" in normalized_sql
+        and f"CHECK (LENGTH(TRANSLATION) BETWEEN 1 AND {MAX_TRANSLATION_CHARS})"
+        in normalized_sql
+    )
+    has_autoincrement = "ID INTEGER PRIMARY KEY AUTOINCREMENT" in normalized_sql
+
+    expected_index = connection.execute(
+        "SELECT name FROM sqlite_master WHERE type = 'index' AND name = ?",
+        ("idx_vocabulary_language_pair",),
+    ).fetchone()
+    index_columns = (
+        tuple(
+            column["name"]
+            for column in connection.execute(
+                "SELECT name FROM pragma_index_info(?) ORDER BY seqno",
+                ("idx_vocabulary_language_pair",),
+            )
+        )
+        if expected_index is not None
+        else ()
+    )
+    has_expected_index = index_columns == ("source_language", "target_language", "id")
+
+    if (
+        actual != _EXPECTED_COLUMNS
+        or not has_unique_key
+        or not has_expected_checks
+        or not has_autoincrement
+        or not has_expected_index
+    ):
         raise VocabularyStoreError("The vocabulary database does not have the expected schema.")
 
 

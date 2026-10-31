@@ -5,7 +5,7 @@ This branch addresses findings exported from the ten analyzed branches. The expo
 ## Changes in this remediation
 
 - Replaced interpolated SQLite statements with fixed SQL text and parameter-bound values. The vocabulary table and its schema identifiers are module-owned constants; no user text is used as SQL syntax.
-- Replaced runtime `assert` checks and selected qualification-helper assertions with explicit errors. This is limited to the paths changed in this remediation; the separate release workflow still contains assertions in OCR and endurance checks.
+- Replaced runtime `assert` checks and selected qualification-helper assertions with explicit errors. The OCR model checks and steady/chaos endurance gates in `.github/workflows/release.yml` also use `require_release_condition`, so those acceptance checks remain active under Python optimization.
 - Kept the CSV formula-prefix rejection and documented why standard CSV quoting is appropriate after that validation.
 - Clarified the deterministic test PRNG, the empty pagination sentinel, and the HTTP handler parameter name.
 - Restricted marshalled frozen-code inspection to an explicitly trusted local build. Externally supplied `--artifact-root` content is treated as untrusted and is never passed to `marshal.loads`; the local-build trust decision is explicit in CI.
@@ -19,4 +19,4 @@ The Agentlinter report claiming that `CLAUDE_HANDOFF.md` is missing is inconsist
 
 ## Validation status
 
-The preceding PR head passed Windows CI (611 tests, packaged-runtime checks, and the artifact privacy scan) and its Codacy pull-request check reported zero new findings. The CodeRabbit follow-up fixes in this branch require a fresh CI and Codacy run. These are incremental pull-request checks; they do not establish that every historical finding on `main` has been eliminated.
+The pre-deployment validation step on commit `6968ed244ee469a9307f3a1e35a4a4b19775dd4e` completed successfully: 615 pytest cases passed with zero failures/errors/skips, and `pip-audit` found zero vulnerabilities across 76 dependency entries. The source/history privacy scan passed with no findings. That run was cancelled during the portable-app build after a newer commit superseded it, so it does not establish a completed packaged-runtime check on that head. Codacy reported zero PR annotations on that same head. The latest documentation-only commit has its own fresh CI run in progress. These are incremental pull-request checks; they do not establish that every historical finding on `main` has been eliminated.

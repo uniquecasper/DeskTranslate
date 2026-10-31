@@ -204,8 +204,8 @@ def test_frozen_process_probe_requires_opt_in_before_launching_anything(tmp_path
 def test_frozen_probe_refuses_executable_outside_repository_build(tmp_path):
     import json
 
-    from tools.qualify_frozen_instance import qualify
     from desktranslate import __version__
+    from tools.qualify_frozen_instance import qualify
 
     program = tmp_path / "DeskTranslate.exe"
     program.write_bytes(b"not executed")

@@ -487,9 +487,14 @@ def _make_database(path, statements, user_version):
     try:
         for statement in statements:
             connection.execute(statement)
-        # PRAGMA user_version does not accept bound parameters. The exact-int
-        # validation above prevents the fixture value from changing SQL syntax.
-        connection.execute("PRAGMA user_version = " + str(user_version))  # nosec B608
+        # PRAGMA user_version does not accept bound parameters. Select only the
+        # explicit fixture statements below; never concatenate arbitrary values.
+        pragma_statements = {
+            -5: "PRAGMA user_version = -5",
+            0: "PRAGMA user_version = 0",
+            1: "PRAGMA user_version = 1",
+        }
+        connection.execute(pragma_statements[user_version])
         connection.commit()
     finally:
         connection.close()

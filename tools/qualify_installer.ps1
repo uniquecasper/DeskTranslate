@@ -35,6 +35,13 @@ $workspace = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $version = (& python -c 'from desktranslate import __version__; print(__version__)').Trim()
 if ($LASTEXITCODE) { throw 'Canonical version lookup failed' }
 $setup = Join-Path $workspace "dist/DeskTranslate-$version-Setup-x64.exe"
+$expectedPreviousVersion = '2.0.0'
+$expectedPreviousInstallerSha256 = '2c2aab018c7e34b38fe4b04f3ffb099c6707fbd63d14dbd21546effe43443fe5'
+if (-not $PreviousInstaller) { throw 'A verified DeskTranslate 2.0.0 installer is required for 2.0.1 qualification' }
+$PreviousInstaller = [IO.Path]::GetFullPath($PreviousInstaller)
+if (-not (Test-Path -LiteralPath $PreviousInstaller -PathType Leaf)) { throw 'Previous installer file is missing' }
+$actualPreviousInstallerSha256 = (Get-FileHash -LiteralPath $PreviousInstaller -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($actualPreviousInstallerSha256 -ne $expectedPreviousInstallerSha256) { throw 'Previous installer SHA-256 does not match the official v2.0.0 release asset' }
 $installRoot = [IO.Path]::GetFullPath((Join-Path $workspace '.audit/installer qualification/翻訳 app'))
 $dataRoot = [IO.Path]::GetFullPath((Join-Path $workspace '.audit/installer qualification/設定 data'))
 $workingRoot = [IO.Path]::GetFullPath((Join-Path $workspace '.audit/installer qualification/空の 作業'))
@@ -54,7 +61,7 @@ if (Get-ChildItem -LiteralPath $workingRoot -Force) { throw 'Probe working direc
 $env:DESKTRANSLATE_DATA_DIR = $dataRoot
 if ($OcrFixture) {
     if (-not $ModelDataDirectory) { throw 'Verified source model directory is required for OCR qualification' }
-    & python -c 'from pathlib import Path; import shutil,sys; from desktranslate.ocr import ModelManager; source=ModelManager(Path(sys.argv[1])); target=ModelManager(); assert source.installed("ja",verify=True); target.directory.mkdir(parents=True,exist_ok=True); [shutil.copyfile(source.path(name),target.path(name)) for name in source.required("ja")]; assert target.installed("ja",verify=True)' $ModelDataDirectory
+    & python -c 'from pathlib import Path; import shutil,sys; from desktranslate.ocr import ModelManager; from tools.release_support import require_release_condition; source=ModelManager(Path(sys.argv[1])); target=ModelManager(); require_release_condition(source.installed("ja",verify=True), "Source Japanese OCR model is not verified"); target.directory.mkdir(parents=True,exist_ok=True); [shutil.copyfile(source.path(name),target.path(name)) for name in source.required("ja")]; require_release_condition(target.installed("ja",verify=True), "Isolated Japanese OCR model is not verified")' $ModelDataDirectory
     if ($LASTEXITCODE) { throw 'Could not prepare verified isolated recognition models' }
 }
 & python -c 'from desktranslate.settings import Settings,SettingsStore; SettingsStore().save(Settings(source="es", onboarding_done=True))'
@@ -67,7 +74,7 @@ $shortcutPaths = @((Join-Path ([Environment]::GetFolderPath('Programs')) 'DeskTr
 foreach ($shortcutPath in $shortcutPaths) {
     if ((Test-Path -LiteralPath $shortcutPath) -and [DeskTranslateQualification.ShellLinks]::Target($shortcutPath) -ne (Join-Path $installRoot 'DeskTranslate.exe')) { throw 'Refusing to replace a shortcut for a different installation' }
 }
-$results = [ordered]@{version=$version; setup_sha256=(Get-FileHash -LiteralPath $setup -Algorithm SHA256).Hash.ToLowerInvariant(); synthetic_data_only=$true; non_ascii_path=$true; non_ascii_data_path=$true; system_only_path=$true; empty_non_ascii_working_directory=$true; previous_version_upgrade=$false; installed_ocr_http_credentials_tested=$false}
+$results = [ordered]@{version=$version; setup_sha256=(Get-FileHash -LiteralPath $setup -Algorithm SHA256).Hash.ToLowerInvariant(); synthetic_data_only=$true; non_ascii_path=$true; non_ascii_data_path=$true; system_only_path=$true; empty_non_ascii_working_directory=$true; previous_version=$expectedPreviousVersion; previous_installer_sha256=$actualPreviousInstallerSha256; previous_version_upgrade=$false; previous_settings_preserved=$false; previous_models_preserved=$false; installed_ocr_http_credentials_tested=$false}
 function Run-Probe([string]$File, [string[]]$Arguments) {
     $previousPath = $env:PATH
     $process = $null
@@ -99,11 +106,27 @@ function Run-Uninstall {
 }
 $options = @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/TASKS=desktopicon',('/DIR="'+$installRoot+'"'))
 try {
-    if ($PreviousInstaller) {
-        Run-Probe ([IO.Path]::GetFullPath($PreviousInstaller)) $options
-        Run-Probe (Join-Path $installRoot 'DeskTranslate.exe') @('--smoke-test')
-        $results.previous_version_upgrade = $true
+    Run-Probe $PreviousInstaller $options
+    $previousExecutable = Join-Path $installRoot 'DeskTranslate.exe'
+    if (-not (Test-Path -LiteralPath $previousExecutable)) { throw 'The v2.0.0 installer did not create the expected executable' }
+    $previousMetadata = (Get-Item -LiteralPath $previousExecutable).VersionInfo
+    $previousUninstallMetadata = Get-ItemProperty -LiteralPath $registry
+    if ($previousMetadata.ProductVersion -ne $expectedPreviousVersion -or
+        $previousMetadata.ProductName -ne 'DeskTranslate' -or
+        $previousUninstallMetadata.DisplayVersion -ne $expectedPreviousVersion) {
+        throw 'The installed previous executable/uninstall registration is not DeskTranslate 2.0.0'
     }
+    Run-Probe $previousExecutable @('--smoke-test')
+    $results.previous_version_detected = $previousMetadata.ProductVersion
+    $results.previous_settings_preserved = (Get-FileHash -LiteralPath $settingsFile).Hash -eq $before
+    $results.previous_models_preserved = @($modelHashes.Keys | Where-Object {
+        -not (Test-Path -LiteralPath (Join-Path $dataRoot "models/$_")) -or
+        (Get-FileHash -LiteralPath (Join-Path $dataRoot "models/$_")).Hash -ne $modelHashes[$_]
+    }).Count -eq 0
+    if (-not $results.previous_settings_preserved -or -not $results.previous_models_preserved) {
+        throw 'The v2.0.0 installation did not preserve the authored settings/models'
+    }
+    $results.previous_version_upgrade = $true
     Run-Probe $setup $options
     $results.install = Test-Path -LiteralPath (Join-Path $installRoot '_internal/desktranslate/assets/models.json')
     Run-Probe (Join-Path $installRoot 'DeskTranslate.exe') @('--smoke-test')
@@ -153,7 +176,7 @@ try {
 $results.final_registry_removed = -not (Test-Path -LiteralPath $registry)
 $results.final_shortcuts_removed = @($shortcutPaths | Where-Object { Test-Path -LiteralPath $_ }).Count -eq 0
 $results.uninstall_cleanup_observed = $true
-$results.passed = $results.install -and $results.startup -and $results.reinstall -and $results.obsolete_runtime_removed -and $results.settings_preserved_on_upgrade -and $results.uninstall -and $results.settings_retained_on_uninstall -and $results.registry_removed -and $results.shortcuts -and $results.shortcuts_removed -and $results.executable_metadata -and $results.uninstall_metadata -and $results.models_retained_on_uninstall -and $results.reinstall_after_uninstall -and $results.final_registry_removed -and $results.final_shortcuts_removed
+$results.passed = $results.previous_version_upgrade -and $results.previous_settings_preserved -and $results.previous_models_preserved -and $results.install -and $results.startup -and $results.reinstall -and $results.obsolete_runtime_removed -and $results.settings_preserved_on_upgrade -and $results.uninstall -and $results.settings_retained_on_uninstall -and $results.registry_removed -and $results.shortcuts -and $results.shortcuts_removed -and $results.executable_metadata -and $results.uninstall_metadata -and $results.models_retained_on_uninstall -and $results.reinstall_after_uninstall -and $results.final_registry_removed -and $results.final_shortcuts_removed
 [IO.File]::WriteAllText((Join-Path $workspace 'docs/installer-qualification.json'), ($results | ConvertTo-Json), [Text.UTF8Encoding]::new($false))
 $results | ConvertTo-Json
 if (-not $results.passed) { throw 'Installer qualification failed' }

@@ -1,46 +1,40 @@
-name: Build release candidate
+name: Build DeskTranslate 2.0.1 qualification candidate
 on:
+  # The 2.0.1 qualification pipeline runs only on its dedicated candidate branch.
+  push:
+    branches:
+      - claude/windows-installer-2-0-1
   workflow_dispatch:
     inputs:
-      tag:
-        description: Exact canonical release tag (optional for internal qualification builds)
-        type: string
-        default: ''
       signed:
         description: Require the configured publisher certificate and trusted timestamp
         type: boolean
         default: false
-      stable:
-        description: Require every documented stable qualification gate
-        type: boolean
-        default: false
-      endurance:
-        description: Run a two-hour source-matched native-resource soak on the pinned release runtime
-        type: boolean
-        default: false
 permissions:
   contents: read
+concurrency:
+  group: desktranslate-2-0-1-qualification-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   candidate:
     permissions:
       contents: read
-      id-token: write
+      # GitHub OIDC permission for provenance attestation; not a stored credential.
+      id-token: write  # nosemgrep
       attestations: write
     runs-on: windows-2022
     timeout-minutes: 210
     env:
       QT_QPA_PLATFORM: offscreen
       DESKTRANSLATE_DATA_DIR: ${{ github.workspace }}/.test-data
-      RELEASE_TAG: ${{ inputs.tag }}
       RELEASE_SIGNED: ${{ inputs.signed }}
-      RELEASE_STABLE: ${{ inputs.stable }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 0
       - name: Prepare pinned Python security runtime
         run: ./tools/install_python.ps1
-      - name: Install and check
+      - name: Install and validate
         shell: pwsh
         run: |
           python -m pip install --require-hashes -r requirements-bootstrap.lock
@@ -51,7 +45,8 @@ jobs:
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python tools/validate.py --predeploy --junitxml .audit/pytest.xml
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          python -c "from pathlib import Path; import os; from tools.release_support import version_gate,stable_gate; version_gate(Path.cwd(),os.getenv('RELEASE_TAG','')); stable_gate(Path.cwd(),os.getenv('RELEASE_TAG','')) if os.getenv('RELEASE_STABLE') == 'true' else None"
+          python -c "from pathlib import Path; from desktranslate import __version__; from tools.release_support import version_gate,require_release_condition; version_gate(Path.cwd()); require_release_condition(__version__ == '2.0.1', 'This workflow is reserved for the 2.0.1 candidate')"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - name: Import publisher certificate
         if: inputs.signed
         env:
@@ -70,40 +65,79 @@ jobs:
         run: ./tools/install_inno.ps1
       - name: Prepare matching LGPL library sources
         run: python tools/library_sources.py
-      - name: Compile installer and portable app
+      - name: Compile unpublished qualification artifacts
         id: compile
+        shell: pwsh
         run: |
           $changes = git status --porcelain
           if ($changes) { $changes; throw 'Release candidate requires a clean tracked source tree' }
-          $options = @('tools/build.py', '--installer')
-          if ($env:RELEASE_TAG) { $options += @('--tag', $env:RELEASE_TAG) }
+          $options = @('tools/build.py', '--installer', '--qualification')
           if ($env:RELEASE_SIGNED -eq 'true') { $options += '--signed' }
-          if ($env:RELEASE_STABLE -eq 'true') { $options += '--stable' }
-          else { $options += '--qualification' }
           & python @options
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - name: Smoke packaged runtime
+        shell: pwsh
         run: |
           $process = Start-Process -FilePath "$PWD/dist/DeskTranslate/DeskTranslate.exe" -ArgumentList '--smoke-test' -PassThru -WindowStyle Hidden
           if (-not $process.WaitForExit(20000)) { $process.Kill(); throw 'Packaged startup timed out' }
           if ($process.ExitCode -ne 0) { throw 'Packaged startup failed' }
       - name: Verify frozen ownership and crash recovery offscreen
+        shell: pwsh
         run: |
           python tools/qualify_frozen_instance.py --component-test --executable dist/DeskTranslate/DeskTranslate.exe --output .audit/packaged-instance.json
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - name: Prepare verified synthetic OCR qualification
         id: prepare_ocr
+        shell: pwsh
         run: |
-          python -c "from threading import Event; from desktranslate.ocr import ModelManager; ModelManager().install('ja',Event(),lambda *args: None); assert ModelManager().installed('ja',verify=True)"
+          python -c "from threading import Event; from desktranslate.ocr import ModelManager; from tools.release_support import require_release_condition; manager=ModelManager(); manager.install('ja',Event(),lambda *args: None); require_release_condition(manager.installed('ja',verify=True), 'Japanese OCR model verification failed')"
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-      - name: Installer lifecycle and artifact privacy
+      - name: Download and verify the official 2.0.0 installer
+        shell: pwsh
+        run: |
+          $previousInstaller = Join-Path $env:RUNNER_TEMP 'DeskTranslate-2.0.0-Setup-x64.exe'
+          Invoke-WebRequest -Uri 'https://github.com/DeskTranslate/DeskTranslate/releases/download/v2.0.0/DeskTranslate-2.0.0-Setup-x64.exe' -OutFile $previousInstaller
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $actual = (Get-FileHash -LiteralPath $previousInstaller -Algorithm SHA256).Hash.ToLowerInvariant()
+          $expected = '2c2aab018c7e34b38fe4b04f3ffb099c6707fbd63d14dbd21546effe43443fe5'
+          if ($actual -ne $expected) { throw "Official v2.0.0 installer checksum mismatch: $actual" }
+          "DESKTRANSLATE_PREVIOUS_INSTALLER=$previousInstaller" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Qualify installer upgrade, lifecycle and artifact privacy
+        shell: pwsh
         run: |
           $portableProbe = @{ModelDataDirectory="$env:DESKTRANSLATE_DATA_DIR/models"}
           if ($env:RELEASE_SIGNED -eq 'true') { $portableProbe.Signed = $true }
           ./tools/qualify_portable.ps1 @portableProbe
-          $probe = @{OcrFixture="$PWD/tests/fixtures/ja-game.png"; ModelDataDirectory="$env:DESKTRANSLATE_DATA_DIR/models"; AllowInstallChanges=$true}
+          $probe = @{PreviousInstaller=$env:DESKTRANSLATE_PREVIOUS_INSTALLER; OcrFixture="$PWD/tests/fixtures/ja-game.png"; ModelDataDirectory="$env:DESKTRANSLATE_DATA_DIR/models"; AllowInstallChanges=$true}
           if ($env:RELEASE_SIGNED -eq 'true') { $probe.Signed = $true }
           ./tools/qualify_installer.ps1 @probe
-          python tools/privacy_scan.py --artifacts --history --output docs/privacy-scan.json
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python tools/privacy_scan.py --artifacts --history --trust-local-build --output docs/privacy-scan.json
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Prepare verified endurance models
+        id: prepare_endurance_models
+        if: ${{ !cancelled() && steps.compile.outcome == 'success' && steps.prepare_ocr.outcome == 'success' }}
+        shell: pwsh
+        run: |
+          python -c "from threading import Event; from desktranslate.ocr import ModelManager; from tools.release_support import require_release_condition; manager=ModelManager(); manager.install('en',Event(),lambda *args: None); require_release_condition(manager.installed('en',verify=True), 'English OCR model verification failed')"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Qualify two-hour steady endurance on the release runtime
+        if: ${{ !cancelled() && steps.prepare_endurance_models.outcome == 'success' }}
+        shell: pwsh
+        run: |
+          if (Test-Path -LiteralPath .audit/stop-steady) { Remove-Item -LiteralPath .audit/stop-steady -Force }
+          python tools/soak.py --long-running --mode steady --duration 7200 --stop-file .audit/stop-steady --output docs/soak-2h-hosted.json
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python -c "import hashlib,json; from pathlib import Path; from desktranslate import __version__; from tools.release_support import runtime_source_hashes,require_release_condition; r=json.loads(Path('docs/soak-2h-hosted.json').read_text()); q=r.get('resource_qualification'); w=r.get('continuous_worker_qualification'); checks=(r.get('version')==__version__ and r.get('requested_duration_s')==7200 and r.get('mode')=='steady' and r.get('python_version')=='3.12.15' and r.get('completed') is True and r.get('elapsed_s',0)>=7200 and r.get('real_ocr') is True and r.get('synthetic_capture') is True and r.get('loopback_http') is True and r.get('workload_passed') is True and r.get('source_unchanged') is True and r.get('source_hashes')==runtime_source_hashes(Path.cwd()) and r.get('harness_unchanged') is True and r.get('harness_sha256')==hashlib.sha256(Path('tools/soak.py').read_bytes()).hexdigest() and r.get('session_restarts')==0 and r.get('workers_closed') is True and r.get('remaining_children')==0 and isinstance(q,dict) and q.get('qualified') is True and isinstance(w,dict) and w.get('qualified') is True); require_release_condition(checks,'Two-hour steady endurance report is incomplete or does not match this exact candidate')"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Qualify thirty-minute fault endurance on the release runtime
+        if: ${{ !cancelled() && steps.prepare_endurance_models.outcome == 'success' }}
+        shell: pwsh
+        run: |
+          if (Test-Path -LiteralPath .audit/stop-chaos) { Remove-Item -LiteralPath .audit/stop-chaos -Force }
+          python tools/soak.py --long-running --mode chaos --duration 1800 --stop-file .audit/stop-chaos --output docs/soak-chaos-hosted.json
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python -c "import hashlib,json; from pathlib import Path; from desktranslate import __version__; from tools.release_support import runtime_source_hashes,require_release_condition; r=json.loads(Path('docs/soak-chaos-hosted.json').read_text()); q=r.get('resource_qualification'); checks=(r.get('version')==__version__ and r.get('requested_duration_s')==1800 and r.get('mode')=='chaos' and r.get('python_version')=='3.12.15' and r.get('completed') is True and r.get('elapsed_s',0)>=1800 and r.get('real_ocr') is True and r.get('synthetic_capture') is True and r.get('loopback_http') is True and r.get('workload_passed') is True and r.get('injected_http_faults',0)>0 and r.get('session_restarts',0)>0 and r.get('source_unchanged') is True and r.get('source_hashes')==runtime_source_hashes(Path.cwd()) and r.get('harness_unchanged') is True and r.get('harness_sha256')==hashlib.sha256(Path('tools/soak.py').read_bytes()).hexdigest() and r.get('workers_closed') is True and r.get('remaining_children')==0 and isinstance(q,dict) and q.get('qualified') is True); require_release_condition(checks,'Thirty-minute chaos endurance report is incomplete or does not match this exact candidate')"
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - name: Attest hosted build artifacts
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6
@@ -111,34 +145,17 @@ jobs:
           subject-path: |
             dist/*.exe
             dist/*.zip
-      - name: Prepare verified endurance models
-        id: prepare_endurance_models
-        if: inputs.endurance && !cancelled() && steps.compile.outcome == 'success' && steps.prepare_ocr.outcome == 'success'
-        run: |
-          python -c "from threading import Event; from desktranslate.ocr import ModelManager; ModelManager().install('en',Event(),lambda *args: None); assert ModelManager().installed('en',verify=True)"
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
-      - name: Qualify two-hour steady endurance on the release runtime
-        if: inputs.endurance && !cancelled() && steps.prepare_endurance_models.outcome == 'success'
-        run: |
-          python tools/soak.py --long-running --mode steady --duration 7200 --stop-file .audit/stop-steady --output docs/soak-2h-hosted.json
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          python -c "import json; from pathlib import Path; from tools.release_support import runtime_source_hashes; r=json.loads(Path('docs/soak-2h-hosted.json').read_text()); assert r['elapsed_s'] >= 7200 and r['workload_passed'] is True and r['resource_qualification']['qualified'] is True and r['continuous_worker_qualification']['qualified'] is True and r['session_restarts'] == 0 and r['source_hashes'] == runtime_source_hashes(Path.cwd()) and r['python_version'] == '3.12.15'"
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
-      - name: Qualify thirty-minute fault endurance on the release runtime
-        if: inputs.endurance && !cancelled() && steps.prepare_endurance_models.outcome == 'success'
-        run: |
-          python tools/soak.py --long-running --mode chaos --duration 1800 --stop-file .audit/stop-chaos --output docs/soak-chaos-hosted.json
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          python -c "import json; from pathlib import Path; from tools.release_support import runtime_source_hashes; r=json.loads(Path('docs/soak-chaos-hosted.json').read_text()); assert r['elapsed_s'] >= 1800 and r['workload_passed'] is True and r['resource_qualification']['qualified'] is True and r['source_hashes'] == runtime_source_hashes(Path.cwd())"
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - name: Remove publisher certificate
-        if: always() && inputs.signed
+        if: ${{ always() }}
+        shell: pwsh
         run: |
           if ($env:DESKTRANSLATE_SIGNING_THUMBPRINT -match '^[A-Fa-f0-9]{40}$') {
             Remove-Item -LiteralPath "Cert:\CurrentUser\My\$env:DESKTRANSLATE_SIGNING_THUMBPRINT" -Force -ErrorAction SilentlyContinue
           }
+          $previousInstaller = Join-Path $env:RUNNER_TEMP 'DeskTranslate-2.0.0-Setup-x64.exe'
+          if (Test-Path -LiteralPath $previousInstaller) { Remove-Item -LiteralPath $previousInstaller -Force }
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
-        if: always()
+        if: ${{ always() }}
         with:
           name: desktranslate-release-candidate
           path: |

@@ -238,27 +238,25 @@ class VocabularyStore:
                 # Version 0 with existing objects is some other application's database.
                 raise VocabularyStoreError("The file is not a DeskTranslate vocabulary database.")
             connection.execute(
-                f"""
-                CREATE TABLE {_TABLE} (
+                """
+                CREATE TABLE vocabulary_entries (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    source TEXT NOT NULL
-                        CHECK (length(source) BETWEEN 1 AND {MAX_SOURCE_CHARS}),
-                    translation TEXT NOT NULL
-                        CHECK (length(translation) BETWEEN 1 AND {MAX_TRANSLATION_CHARS}),
+                    source TEXT NOT NULL CHECK (length(source) BETWEEN 1 AND 500),
+                    translation TEXT NOT NULL CHECK (length(translation) BETWEEN 1 AND 2000),
                     source_language TEXT NOT NULL,
                     target_language TEXT NOT NULL,
                     created_at TEXT NOT NULL,
-                    UNIQUE ({", ".join(_UNIQUE_COLUMNS)})
+                    UNIQUE (source_language, target_language, source, translation)
                 )
                 """
             )
             connection.execute(
-                f"""
+                """
                 CREATE INDEX idx_vocabulary_language_pair
-                ON {_TABLE} (source_language, target_language, id DESC)
+                ON vocabulary_entries (source_language, target_language, id DESC)
                 """
             )
-            connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+            connection.execute("PRAGMA user_version = 1")
 
     def add(
         self,
@@ -279,8 +277,8 @@ class VocabularyStore:
 
         with self._session(write=True) as connection:
             existing = connection.execute(
-                f"""
-                SELECT * FROM {_TABLE}
+                """
+                SELECT * FROM vocabulary_entries
                 WHERE source_language = ? AND target_language = ?
                     AND source = ? AND translation = ?
                 """,
@@ -289,20 +287,20 @@ class VocabularyStore:
             if existing is not None:
                 return _entry(existing)
 
-            count = int(connection.execute(f"SELECT COUNT(*) FROM {_TABLE}").fetchone()[0])
+            count = int(connection.execute("SELECT COUNT(*) FROM vocabulary_entries").fetchone()[0])
             if count >= MAX_ENTRIES:
                 raise ValueError("The saved vocabulary limit has been reached.")
 
             cursor = connection.execute(
-                f"""
-                INSERT INTO {_TABLE} (
+                """
+                INSERT INTO vocabulary_entries (
                     source_language, target_language, source, translation, created_at
                 ) VALUES (?, ?, ?, ?, ?)
                 """,
                 (*key, created_at),
             )
             row = connection.execute(
-                f"SELECT * FROM {_TABLE} WHERE id = ?", (cursor.lastrowid,)
+                "SELECT * FROM vocabulary_entries WHERE id = ?", (cursor.lastrowid,)
             ).fetchone()
             if row is None:
                 raise VocabularyStoreError("The saved vocabulary entry could not be read back.")
@@ -311,7 +309,9 @@ class VocabularyStore:
     def get(self, entry_id: int) -> VocabularyEntry | None:
         entry_id = _entry_id(entry_id)
         with self._session() as connection:
-            row = connection.execute(f"SELECT * FROM {_TABLE} WHERE id = ?", (entry_id,)).fetchone()
+            row = connection.execute(
+                "SELECT * FROM vocabulary_entries WHERE id = ?", (entry_id,)
+            ).fetchone()
             return _entry(row) if row is not None else None
 
     def list_entries(
@@ -327,33 +327,57 @@ class VocabularyStore:
             raise ValueError(f"Limit must be between 1 and {MAX_LIST_LIMIT}.")
         if type(offset) is not int or not 0 <= offset <= MAX_ENTRIES:
             raise ValueError(f"Offset must be an integer between 0 and {MAX_ENTRIES}.")
-        clauses: list[str] = []
-        params: list[str | int] = []
-        if source_language is not None:
-            clauses.append("source_language = ?")
-            params.append(_language(source_language, "Source language"))
-        if target_language is not None:
-            clauses.append("target_language = ?")
-            params.append(_language(target_language, "Target language"))
-        where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
+        source_language = (
+            _language(source_language, "Source language") if source_language is not None else None
+        )
+        target_language = (
+            _language(target_language, "Target language") if target_language is not None else None
+        )
 
         with self._session() as connection:
-            rows = connection.execute(
-                f"""
-                SELECT * FROM {_TABLE}{where}
-                ORDER BY id DESC
-                LIMIT ? OFFSET ?
-                """,
-                (*params, limit, offset),
-            ).fetchall()
+            if source_language is not None and target_language is not None:
+                rows = connection.execute(
+                    """
+                    SELECT * FROM vocabulary_entries
+                    WHERE source_language = ? AND target_language = ?
+                    ORDER BY id DESC LIMIT ? OFFSET ?
+                    """,
+                    (source_language, target_language, limit, offset),
+                ).fetchall()
+            elif source_language is not None:
+                rows = connection.execute(
+                    """
+                    SELECT * FROM vocabulary_entries
+                    WHERE source_language = ?
+                    ORDER BY id DESC LIMIT ? OFFSET ?
+                    """,
+                    (source_language, limit, offset),
+                ).fetchall()
+            elif target_language is not None:
+                rows = connection.execute(
+                    """
+                    SELECT * FROM vocabulary_entries
+                    WHERE target_language = ?
+                    ORDER BY id DESC LIMIT ? OFFSET ?
+                    """,
+                    (target_language, limit, offset),
+                ).fetchall()
+            else:
+                rows = connection.execute(
+                    """
+                    SELECT * FROM vocabulary_entries
+                    ORDER BY id DESC LIMIT ? OFFSET ?
+                    """,
+                    (limit, offset),
+                ).fetchall()
             return [_entry(row) for row in rows]
 
     def delete(self, entry_id: int) -> bool:
         entry_id = _entry_id(entry_id)
         with self._session(write=True) as connection:
-            cursor = connection.execute(f"DELETE FROM {_TABLE} WHERE id = ?", (entry_id,))
+            cursor = connection.execute("DELETE FROM vocabulary_entries WHERE id = ?", (entry_id,))
             return cursor.rowcount > 0
 
     def count(self) -> int:
         with self._session() as connection:
-            return int(connection.execute(f"SELECT COUNT(*) FROM {_TABLE}").fetchone()[0])
+            return int(connection.execute("SELECT COUNT(*) FROM vocabulary_entries").fetchone()[0])

@@ -36,7 +36,8 @@ def main() -> None:
             app.processEvents()
             time.sleep(0.02)
         scroll = window.pages.currentWidget()
-        assert isinstance(scroll, QScrollArea)
+        if not isinstance(scroll, QScrollArea):
+            raise RuntimeError("A navigation page did not provide its expected scroll area.")
         pages.append(
             {
                 "page": window.navigation.item(index).text(),
@@ -64,7 +65,8 @@ def main() -> None:
     for _ in range(6):
         app.processEvents()
         page = wizard.currentPage()
-        assert page is not None
+        if page is None:
+            raise RuntimeError("The setup wizard did not provide its current page.")
         buttons_fit = all(
             not wizard.button(identifier).isVisible()
             or wizard.rect().contains(

@@ -10,7 +10,7 @@ import json
 import multiprocessing as mp
 import os
 import shutil
-import subprocess
+import subprocess  # nosec B404  # Required shell-free process integration.
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -444,8 +444,8 @@ class TesseractEngine:
         start = time.perf_counter()
         flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
         try:
-            response = subprocess.run(
-                [
+            response = subprocess.run(  # nosec B603  # Resolved OCR binary; fixed argv and image bytes on stdin.  # nosemgrep
+                [  # nosemgrep
                     str(self.executable),
                     "stdin",
                     "stdout",
@@ -549,7 +549,8 @@ class IsolatedOCR:
             if os.name == "nt":
                 from desktranslate.processes import ProcessJob
 
-                assert self.process.pid is not None
+                if self.process.pid is None:
+                    raise RuntimeError("OCR worker process has no process identifier.")
                 self.job = ProcessJob(self.process.pid)
             self.connection.send("initialize")
         except Exception:

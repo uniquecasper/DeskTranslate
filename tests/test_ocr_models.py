@@ -1,6 +1,6 @@
 import hashlib
 import os
-import subprocess
+import subprocess  # nosec B404  # Required shell-free process integration.
 import sys
 from threading import Event
 
@@ -14,7 +14,7 @@ from desktranslate.ocr import ModelManager
 @pytest.mark.parametrize("inherited", ["0", ""])
 def test_process_privacy_policy_precedes_native_ocr_import(inherited):
     environment = {**os.environ, "ORT_DISABLE_TELEMETRY": inherited}
-    result = subprocess.run(
+    result = subprocess.run(  # nosec B603  # Test-owned Python snippet; no shell.  # nosemgrep
         [
             sys.executable,
             "-c",

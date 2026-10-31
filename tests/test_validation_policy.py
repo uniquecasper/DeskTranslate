@@ -1,7 +1,7 @@
 import os
 import shutil
 import socket
-import subprocess
+import subprocess  # nosec B404  # Required shell-free process integration.
 import sys
 from pathlib import Path
 
@@ -11,6 +11,13 @@ from tools.validate import commands
 from desktranslate.errors import CredentialError
 from desktranslate.hotkeys import Hotkeys
 from desktranslate.security import CredentialStore
+
+
+def test_release_qualification_gates_raise_explicitly():
+    from tools.release_support import require_release_condition
+
+    with pytest.raises(RuntimeError, match="gate failed"):
+        require_release_condition(False, "gate failed")
 
 
 def test_widget_tests_cannot_inherit_the_native_desktop_backend():
@@ -107,7 +114,7 @@ sys.argv=[script]
 sys.path.insert(0,str(pathlib.Path(script).parent))
 runpy.run_path(script,run_name='__main__')
 """
-    result = subprocess.run(
+    result = subprocess.run(  # nosec B603  # Test-owned Python snippet; no shell.  # nosemgrep
         [sys.executable, "-c", bootstrap, str(root / "tools" / script)],
         cwd=root,
         capture_output=True,
@@ -201,6 +208,24 @@ def test_frozen_process_probe_requires_opt_in_before_launching_anything(tmp_path
     assert not output.exists()
 
 
+def test_frozen_probe_refuses_executable_outside_repository_build(tmp_path):
+    import json
+
+    from tools.qualify_frozen_instance import qualify
+
+    from desktranslate import __version__
+
+    program = tmp_path / "DeskTranslate.exe"
+    program.write_bytes(b"not executed")
+    (tmp_path / "build-info.json").write_text(
+        json.dumps({"version": __version__, "source_sha256": "0" * 64}), encoding="utf-8"
+    )
+    (tmp_path / "managed-runtime.txt").write_text("authored marker", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="current repository"):
+        qualify(program)
+
+
 def test_frozen_probe_refuses_installer_before_process_execution(tmp_path, monkeypatch):
     import json
 
@@ -219,6 +244,91 @@ def test_frozen_probe_refuses_installer_before_process_execution(tmp_path, monke
     monkeypatch.setattr(subprocess, "Popen", forbidden)
     with pytest.raises(ValueError, match="not an installer"):
         qualify(tmp_path / "Setup.exe")
+
+
+def test_bounded_probe_rejects_executable_without_explicit_approval(tmp_path):
+    from tools.qualification_policy import run_bounded_probe
+
+    unapproved = tmp_path / "unapproved.exe"
+    with pytest.raises(ValueError, match="explicitly approved executable"):
+        run_bounded_probe(
+            [str(unapproved), "--smoke-test"],
+            dict(os.environ),
+            1,
+        )
+
+
+def test_bounded_probe_launches_the_exact_approved_executable(monkeypatch, tmp_path):
+    import io
+
+    from tools.qualification_policy import run_bounded_probe
+
+    approved = tmp_path / "approved" / "probe.exe"
+    approved.parent.mkdir()
+    approved.write_bytes(b"test executable placeholder")
+    child_cwd = tmp_path / "different-working-directory"
+    child_cwd.mkdir()
+    # Keep the test on one filesystem: Windows runners may place the checkout
+    # on D: and pytest's temporary directory on C:.
+    monkeypatch.chdir(tmp_path)
+    relative_executable = os.path.relpath(approved, Path.cwd())
+    captured = {}
+
+    class FakeProcess:
+        pid = 12345
+        returncode = 0
+
+        def __init__(self):
+            self.stdout = io.StringIO()
+
+        def communicate(self, timeout):
+            return "", None
+
+        def poll(self):
+            return self.returncode
+
+        def wait(self, timeout):
+            return self.returncode
+
+        def kill(self):
+            self.returncode = -9
+
+    class FakeJob:
+        def close(self):
+            pass
+
+    def fake_popen(command, **kwargs):
+        captured["command"] = command
+        return FakeProcess()
+
+    monkeypatch.setattr(subprocess, "Popen", fake_popen)
+    if os.name == "nt":
+        from desktranslate import processes
+
+        monkeypatch.setattr(processes, "ProcessJob", lambda pid: FakeJob())
+    else:
+        import tools.qualification_policy as policy
+
+        monkeypatch.setattr(policy.os, "killpg", lambda *args: None)
+
+    result = run_bounded_probe(
+        [relative_executable, "--smoke-test"],
+        dict(os.environ),
+        1,
+        cwd=child_cwd,
+        allowed_executable=approved,
+    )
+    assert result == 0
+    assert captured["command"][0] == str(approved.resolve())
+    assert captured["command"][1:] == ["--smoke-test"]
+
+
+def test_probe_output_escapes_characters_unsupported_by_windows_console():
+    from tools.qualification_policy import console_safe_text
+
+    assert console_safe_text("日本語", "cp1252") == r"\u65e5\u672c\u8a9e"
+    assert console_safe_text("plain ASCII", "cp1252") == "plain ASCII"
+    assert console_safe_text("日本語", None) == "日本語"
 
 
 @pytest.mark.skipif(os.name != "nt", reason="Owned Windows supervisor lifecycle")

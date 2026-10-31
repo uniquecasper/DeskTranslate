@@ -1,3 +1,41 @@
+# Active assignment — DeskTranslate 2.0.1 qualification and integration
+
+Updated: 2026-10-31
+
+**This is the active project handoff.** The Windows 2.0.1 candidate and the security remediation must be integrated and qualified together.
+
+- Repository: `uniquecasper/DeskTranslate`
+- Candidate branch: `claude/windows-installer-2-0-1`
+- Security remediation branch: `fix/codacy-security-remediation`
+- Pull requests: [#4](https://github.com/uniquecasper/DeskTranslate/pull/4) (already merged), [#5](https://github.com/uniquecasper/DeskTranslate/pull/5), [#6](https://github.com/uniquecasper/DeskTranslate/pull/6)
+- Active scope: merge the security remediation into the Windows 2.0.1 candidate, qualify the exact candidate, then merge the completed PR into `main`.
+- Do not create a stable tag or publish a 2.0.1 release as part of candidate qualification.
+
+## Current acceptance requirements
+
+1. Keep the PR #6 SQL parameterization, runtime assertion replacements, executable-launch policy, privacy-scan trust boundary, CI Codacy evidence capture and documentation.
+2. Keep the PR #5 application/manifest version at 2.0.1.
+3. Download the official DeskTranslate v2.0.0 installer and verify SHA-256
+   `2c2aab018c7e34b38fe4b04f3ffb099c6707fbd63d14dbd21546effe43443fe5` before running it.
+4. Prove the installed previous executable and uninstall metadata both identify version 2.0.0, then upgrade to 2.0.1 and verify settings/models remain unchanged.
+5. Run the 7,200-second steady and 1,800-second chaos endurance workloads on the exact packaged candidate. Validate version, Python runtime, source/assets, harness hash, completion, resource qualification and worker cleanup.
+6. Keep stable-release evidence separate. The existing manual qualification and unsigned approval describe v2.0.0 and must not be reused for v2.0.1.
+7. Preserve the distinction between hosted offscreen qualification and native consumer-PC checks that remain NOT TESTED.
+
+## Responsibility and merge policy
+
+Project coordination, repository edits, evidence review and PR integration are performed directly against the connected GitHub repository. No external coding assistant is required for this handoff.
+
+Merge only after the candidate branch's Windows quality workflow and full release-candidate qualification workflow have succeeded on the final combined commit. Merge PR #5 with a merge commit so the PR #6 history remains reachable; then verify GitHub records PR #6 as merged. PR #4 is already merged.
+
+The upstream v2.0.0 release asset is the only approved previous-installer fixture. Do not run a downloaded installer unless the SHA-256 matches the value above.
+
+## Evidence reporting
+
+Record exact commit SHAs, workflow run IDs, artifact digests, test counts and limitations. Do not call skipped or untested checks passed. An internal qualification artifact is not a stable release.
+
+---
+
 # Claude Handoff — Vocabulary Learning
 
 Updated: 2026-10-29

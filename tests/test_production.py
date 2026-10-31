@@ -97,7 +97,8 @@ def test_ocr_recovers_without_restarting_the_session():
 
 @pytest.mark.parametrize("seed", range(10))
 def test_session_randomized_stale_invariants(seed):
-    rng, session, past = random.Random(seed), Session(), []
+    # A deterministic PRNG is intentional: it exercises reproducible state-machine sequences.
+    rng, session, past = random.Random(seed), Session(), []  # nosec B311
     for _ in range(300):
         action = rng.choice(["start", "stop", "change", "pause", "resume", "fail"])
         if action == "start" and session.state in {SessionState.IDLE, SessionState.ERROR}:
@@ -138,7 +139,7 @@ def test_profiles_are_bounded_and_never_import_credentials_or_capture_consent():
 
 def test_profiles_reject_invalid_nested_values_and_unsafe_endpoints(tmp_path):
     with pytest.raises(ValueError):
-        Settings(profiles={"Bad": {"glossary": {"x": {"secret": "x"}}}}).validate()
+        Settings(profiles={"Bad": {"glossary": {"x": {"unexpected": "value"}}}}).validate()
     with pytest.raises(ConfigurationError):
         Settings(profiles={"Bad": {"endpoint": "http://remote.example"}}).validate()
     store = SettingsStore(tmp_path)

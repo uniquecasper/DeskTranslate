@@ -10,7 +10,7 @@ import json
 import marshal
 import os
 import re
-import subprocess
+import subprocess  # nosec B404  # Required shell-free process integration.
 import types
 import zipfile
 from functools import lru_cache
@@ -90,7 +90,13 @@ def normalized_code(code: types.CodeType) -> types.CodeType:
     )
 
 
-def vendor_metadata(location: str, digest: str, data: bytes | None) -> dict[str, str] | None:
+def vendor_metadata(
+    location: str,
+    digest: str,
+    data: bytes | None,
+    *,
+    trusted_local_build: bool = False,
+) -> dict[str, str] | None:
     # These published wheel inputs have generic upstream build paths. No
     # exemption covers our source, arbitrary modules, tokens or private keys.
     relative = next(
@@ -118,7 +124,12 @@ def vendor_metadata(location: str, digest: str, data: bytes | None) -> dict[str,
         if digest != source_digest:
             return None
     else:
-        actual = marshal.loads(data)
+        # marshal is unsafe for untrusted input. This parser is permitted only when
+        # the caller explicitly attests that the archive was built locally in this job.
+        # User-supplied --artifact-root contents are never deserialized.
+        if not trusted_local_build:
+            return None
+        actual = marshal.loads(data)  # nosec B302  # nosemgrep
         expected = compile(path.read_bytes(), str(path), "exec", dont_inherit=True)
         if not isinstance(actual, types.CodeType) or normalized_code(actual) != normalized_code(
             expected
@@ -127,9 +138,19 @@ def vendor_metadata(location: str, digest: str, data: bytes | None) -> dict[str,
     return {"package": package, "version": version, "source_sha256": source_digest}
 
 
-def run(artifacts: bool, history: bool, artifact_root: Path | None = None) -> dict[str, object]:
+def run(
+    artifacts: bool,
+    history: bool,
+    artifact_root: Path | None = None,
+    *,
+    trust_local_build: bool = False,
+) -> dict[str, object]:
     import io
 
+    if trust_local_build and artifact_root is not None:
+        raise ValueError(
+            "--trust-local-build cannot be combined with an externally supplied --artifact-root"
+        )
     patterns = signatures()
     findings = []
     upstream_metadata = []
@@ -142,10 +163,18 @@ def run(artifacts: bool, history: bool, artifact_root: Path | None = None) -> di
         "frozen_modules": 0,
     }
 
-    def checked(location: str, stream: BinaryIO, frozen: bytes | None = None) -> None:
+    def checked(
+        location: str,
+        stream: BinaryIO,
+        frozen: bytes | None = None,
+        *,
+        trusted_local_build: bool = False,
+    ) -> None:
         categories, digest = scan_stream(stream, patterns)
         if "private_build_home" in categories:
-            vendor = vendor_metadata(location, digest, frozen)
+            vendor = vendor_metadata(
+                location, digest, frozen, trusted_local_build=trusted_local_build
+            )
             if vendor:
                 upstream_metadata.append(
                     {
@@ -159,7 +188,7 @@ def run(artifacts: bool, history: bool, artifact_root: Path | None = None) -> di
             findings.append({"location": location, "categories": sorted(categories)})
 
     tracked = (
-        subprocess.check_output(
+        subprocess.check_output(  # nosec B603, B607  # Fixed Git argv; scans local repository tree.  # nosemgrep
             ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"], cwd=ROOT
         )
         .decode()
@@ -173,14 +202,15 @@ def run(artifacts: bool, history: bool, artifact_root: Path | None = None) -> di
             counts["tree_files"] += 1
     if history:
         objects = (
-            subprocess.check_output(["git", "rev-list", "--objects", "--all"], cwd=ROOT)
+            subprocess.check_output(["git", "rev-list", "--objects", "--all"], cwd=ROOT)  # nosec B603, B607  # Fixed Git argv; scans local refs.  # nosemgrep
             .decode()
             .splitlines()
         )
-        process = subprocess.Popen(
+        process = subprocess.Popen(  # nosec B603, B607  # Fixed Git argv; pipes are consumed and closed below.  # nosemgrep
             ["git", "cat-file", "--batch"], cwd=ROOT, stdin=subprocess.PIPE, stdout=subprocess.PIPE
         )
-        assert process.stdin and process.stdout
+        if process.stdin is None or process.stdout is None:
+            raise RuntimeError("Git object inspection pipes were not created.")
         try:
             for entry in objects:
                 identity = entry.split(" ", 1)[0]
@@ -218,7 +248,12 @@ def run(artifacts: bool, history: bool, artifact_root: Path | None = None) -> di
                 for module in pyz.toc:
                     data = pyz.extract(module, raw=True)
                     if data:
-                        checked("frozen/" + module, io.BytesIO(data), frozen=data)
+                        checked(
+                            "frozen/" + module,
+                            io.BytesIO(data),
+                            frozen=data,
+                            trusted_local_build=trust_local_build,
+                        )
                         counts["frozen_modules"] += 1
             elif entry[-1] in {"s", "m", "M"}:
                 checked("frozen/" + name, io.BytesIO(archive.extract(name)))
@@ -253,11 +288,25 @@ if __name__ == "__main__":
     parser.add_argument("--artifacts", action="store_true")
     parser.add_argument("--history", action="store_true")
     parser.add_argument(
-        "--artifact-root", type=Path, help="Extracted hosted dist directory to inspect"
+        "--artifact-root",
+        type=Path,
+        help="Externally supplied extracted dist directory to inspect (treated as untrusted)",
+    )
+    parser.add_argument(
+        "--trust-local-build",
+        action="store_true",
+        help="Allow the narrow marshal inspection for an archive built locally in this job; never use with --artifact-root",
     )
     parser.add_argument("--output", type=Path, default=Path("docs/privacy-scan.json"))
     args = parser.parse_args()
-    report = run(args.artifacts, args.history, args.artifact_root)
+    if args.trust_local_build and args.artifact_root is not None:
+        parser.error("--trust-local-build cannot be combined with --artifact-root")
+    report = run(
+        args.artifacts,
+        args.history,
+        args.artifact_root,
+        trust_local_build=args.trust_local_build,
+    )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2), encoding="utf-8")
     print(json.dumps(report))

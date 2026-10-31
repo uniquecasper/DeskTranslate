@@ -13,6 +13,13 @@ from desktranslate.hotkeys import Hotkeys
 from desktranslate.security import CredentialStore
 
 
+def test_release_qualification_gates_raise_explicitly():
+    from tools.release_support import require_release_condition
+
+    with pytest.raises(RuntimeError, match="gate failed"):
+        require_release_condition(False, "gate failed")
+
+
 def test_widget_tests_cannot_inherit_the_native_desktop_backend():
     from PySide6.QtWidgets import QApplication
 

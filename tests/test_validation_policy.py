@@ -251,6 +251,68 @@ def test_bounded_probe_rejects_executable_without_explicit_approval(tmp_path):
         )
 
 
+def test_bounded_probe_launches_the_exact_approved_executable(monkeypatch, tmp_path):
+    import io
+
+    from tools.qualification_policy import run_bounded_probe
+
+    approved = tmp_path / "approved" / "probe.exe"
+    approved.parent.mkdir()
+    approved.write_bytes(b"test executable placeholder")
+    child_cwd = tmp_path / "different-working-directory"
+    child_cwd.mkdir()
+    relative_executable = os.path.relpath(approved, Path.cwd())
+    captured = {}
+
+    class FakeProcess:
+        pid = 12345
+        returncode = 0
+
+        def __init__(self):
+            self.stdout = io.StringIO()
+
+        def communicate(self, timeout):
+            return "", None
+
+        def poll(self):
+            return self.returncode
+
+        def wait(self, timeout):
+            return self.returncode
+
+        def kill(self):
+            self.returncode = -9
+
+    class FakeJob:
+        def close(self):
+            pass
+
+    def fake_popen(command, **kwargs):
+        captured["command"] = command
+        return FakeProcess()
+
+    monkeypatch.setattr(subprocess, "Popen", fake_popen)
+    if os.name == "nt":
+        from desktranslate import processes
+
+        monkeypatch.setattr(processes, "ProcessJob", lambda pid: FakeJob())
+    else:
+        import tools.qualification_policy as policy
+
+        monkeypatch.setattr(policy.os, "killpg", lambda *args: None)
+
+    result = run_bounded_probe(
+        [relative_executable, "--smoke-test"],
+        dict(os.environ),
+        1,
+        cwd=child_cwd,
+        allowed_executable=approved,
+    )
+    assert result == 0
+    assert captured["command"][0] == str(approved.resolve())
+    assert captured["command"][1:] == ["--smoke-test"]
+
+
 def test_probe_output_escapes_characters_unsupported_by_windows_console():
     from tools.qualification_policy import console_safe_text
 

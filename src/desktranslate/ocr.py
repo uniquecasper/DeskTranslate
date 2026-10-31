@@ -53,6 +53,10 @@ class _ModelIntegrityError(Exception):
     """The downloaded bytes do not match the pinned model digest."""
 
 
+class _RetryableModelDownloadError(Exception):
+    """A temporary HTTP response requires a fresh download attempt."""
+
+
 def detector_size(width: int, height: int, short_side: int = 736) -> tuple[int, int]:
     """Preserve the pinned detector's scaling, but bound extreme aspect ratios.
 
@@ -211,7 +215,7 @@ class ModelManager:
                                         except httpx.HTTPStatusError as error:
                                             if error.response.status_code not in MODEL_RETRYABLE_STATUS_CODES:
                                                 raise
-                                            raise _IncompleteModelDownload(
+                                            raise _RetryableModelDownloadError(
                                                 "Temporary model server response"
                                             ) from error
 
@@ -310,6 +314,7 @@ class ModelManager:
                                 TimeoutError,
                                 _IncompleteModelDownload,
                                 _ModelIntegrityError,
+                                _RetryableModelDownloadError,
                             ) as error:
                                 retry_error = error
                             finally:

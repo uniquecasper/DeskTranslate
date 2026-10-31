@@ -176,9 +176,14 @@ class ModelManager:
             headers={"Accept-Encoding": "identity"},
         ) as client:
             for model in self.required(language):
+                info = self.catalog[model]
+                expected_size = info.get("bytes")
+                if expected_size is not None and (
+                    type(expected_size) is not int or not 0 <= expected_size <= 100_000_000
+                ):
+                    raise OCRInitializationError("Invalid language pack manifest size.")
                 if self.valid(model):
                     continue
-                info = self.catalog[model]
                 target = self.path(model)
                 partial = target.with_suffix(".part")
                 url = info["url"]
@@ -232,20 +237,12 @@ class ModelManager:
                                                 "Invalid language pack download size."
                                             ) from None
 
-                                        expected_size = info.get("bytes")
                                         if (
                                             declared_total is not None
                                             and not 0 <= declared_total <= 100_000_000
                                         ):
                                             raise OCRInitializationError(
                                                 "Invalid language pack download size."
-                                            )
-                                        if expected_size is not None and (
-                                            type(expected_size) is not int
-                                            or not 0 <= expected_size <= 100_000_000
-                                        ):
-                                            raise OCRInitializationError(
-                                                "Invalid language pack manifest size."
                                             )
                                         if (
                                             declared_total is not None

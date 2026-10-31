@@ -63,7 +63,7 @@ jobs:
           if ($process.ExitCode -ne 0) { throw 'Frozen runtime verification failed' }
       - name: Artifact privacy gate
         run: python tools/privacy_scan.py --history --artifacts --trust-local-build --output docs/privacy-scan.json
-            - name: Capture Codacy check annotations
+      - name: Capture Codacy check annotations
         if: ${{ !cancelled() && github.event_name == 'pull_request' }}
         shell: pwsh
         env:

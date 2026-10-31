@@ -40,6 +40,17 @@ from desktranslate.settings import data_dir
 
 INSTALL_LOCK = Lock()
 MODEL_TIMEOUT = 180.0
+MODEL_DOWNLOAD_ATTEMPTS = 3
+MODEL_RETRY_BACKOFF = 0.25
+MODEL_RETRYABLE_STATUS_CODES = frozenset({408, 425, 429, 500, 502, 503, 504})
+
+
+class _IncompleteModelDownload(Exception):
+    """The response ended before its declared or catalogued size."""
+
+
+class _ModelIntegrityError(Exception):
+    """The downloaded bytes do not match the pinned model digest."""
 
 
 def detector_size(width: int, height: int, short_side: int = 736) -> tuple[int, int]:
@@ -169,53 +180,159 @@ class ModelManager:
                 url = info["url"]
                 try:
                     async with asyncio.timeout(MODEL_TIMEOUT):
-                        for _ in range(6):
+                        for attempt in range(MODEL_DOWNLOAD_ATTEMPTS):
                             if cancel.is_set():
                                 raise Cancelled()
-                            async with client.stream("GET", url) as response:
-                                if response.is_redirect:
-                                    next_url = str(response.url.join(response.headers["location"]))
-                                    if not next_url.startswith("https://"):
-                                        raise OCRInitializationError(
-                                            "Model download requires HTTPS."
+                            partial.unlink(missing_ok=True)
+                            retry_error: Exception | None = None
+                            try:
+                                completed = False
+                                redirect_count = 0
+                                while redirect_count <= 5:
+                                    if cancel.is_set():
+                                        raise Cancelled()
+                                    async with client.stream("GET", url) as response:
+                                        if response.is_redirect:
+                                            location = response.headers.get("location")
+                                            if not location or redirect_count >= 5:
+                                                raise OCRInitializationError(
+                                                    "Too many or invalid model download redirects."
+                                                )
+                                            next_url = str(response.url.join(location))
+                                            if not next_url.startswith("https://"):
+                                                raise OCRInitializationError(
+                                                    "Model download requires HTTPS."
+                                                )
+                                            url = next_url
+                                            redirect_count += 1
+                                            continue
+                                        try:
+                                            response.raise_for_status()
+                                        except httpx.HTTPStatusError as error:
+                                            if error.response.status_code not in MODEL_RETRYABLE_STATUS_CODES:
+                                                raise
+                                            raise _IncompleteModelDownload(
+                                                "Temporary model server response"
+                                            ) from error
+
+                                        raw_total = response.headers.get("Content-Length")
+                                        try:
+                                            declared_total = (
+                                                int(raw_total) if raw_total is not None else None
+                                            )
+                                        except ValueError:
+                                            raise OCRInitializationError(
+                                                "Invalid language pack download size."
+                                            ) from None
+
+                                        expected_size = info.get("bytes")
+                                        if (
+                                            declared_total is not None
+                                            and not 0 <= declared_total <= 100_000_000
+                                        ):
+                                            raise OCRInitializationError(
+                                                "Invalid language pack download size."
+                                            )
+                                        if (
+                                            type(expected_size) is int
+                                            and not 0 <= expected_size <= 100_000_000
+                                        ):
+                                            raise OCRInitializationError(
+                                                "Invalid language pack manifest size."
+                                            )
+                                        if (
+                                            declared_total is not None
+                                            and type(expected_size) is int
+                                            and declared_total != expected_size
+                                        ):
+                                            raise _IncompleteModelDownload(
+                                                "Content-Length does not match the model manifest"
+                                            )
+
+                                        total = (
+                                            declared_total
+                                            if declared_total is not None
+                                            else expected_size
+                                            if type(expected_size) is int
+                                            else 0
                                         )
-                                    url = next_url
-                                    continue
-                                response.raise_for_status()
-                                try:
-                                    total = int(response.headers.get("Content-Length", 0))
-                                except ValueError:
-                                    total = 0
-                                if not 0 <= total <= 100_000_000:
-                                    raise OCRInitializationError(
-                                        "Invalid language pack download size."
-                                    )
-                                digest = hashlib.sha256()
-                                downloaded = 0
-                                with partial.open("wb") as stream:
-                                    async for chunk in identity_chunks(response):
+                                        digest = hashlib.sha256()
+                                        downloaded = 0
+                                        with partial.open("wb") as stream:
+                                            async for chunk in identity_chunks(response):
+                                                if cancel.is_set():
+                                                    raise Cancelled()
+                                                downloaded += len(chunk)
+                                                if downloaded > 100_000_000 or (
+                                                    total and downloaded > total
+                                                ):
+                                                    raise OCRInitializationError(
+                                                        "Model download exceeded the size limit."
+                                                    )
+                                                stream.write(chunk)
+                                                digest.update(chunk)
+                                                progress(model, downloaded, total)
+
                                         if cancel.is_set():
                                             raise Cancelled()
-                                        downloaded += len(chunk)
-                                        if downloaded > 100_000_000:
-                                            raise OCRInitializationError(
-                                                "Model download exceeded the size limit."
+                                        if (
+                                            declared_total is not None
+                                            and downloaded != declared_total
+                                        ):
+                                            raise _IncompleteModelDownload(
+                                                "Downloaded bytes do not match Content-Length"
                                             )
-                                        stream.write(chunk)
-                                        digest.update(chunk)
-                                        progress(model, downloaded, total)
-                                progress("verifying:" + model, downloaded, downloaded)
-                                if digest.hexdigest() != info["sha256"]:
+                                        if (
+                                            type(expected_size) is int
+                                            and downloaded != expected_size
+                                        ):
+                                            raise _IncompleteModelDownload(
+                                                "Downloaded bytes do not match the model manifest"
+                                            )
+                                        progress("verifying:" + model, downloaded, downloaded)
+                                        if digest.hexdigest() != info["sha256"]:
+                                            raise _ModelIntegrityError()
+                                        if cancel.is_set():
+                                            raise Cancelled()
+                                        os.replace(partial, target)
+                                        progress("installed:" + model, downloaded, downloaded)
+                                        completed = True
+                                        break
+
+                                if not completed:
                                     raise OCRInitializationError(
-                                        "Model verification failed. Retry the download."
+                                        "Too many model download redirects."
                                     )
-                                os.replace(partial, target)
-                                progress("installed:" + model, downloaded, downloaded)
+                            except httpx.HTTPStatusError:
+                                raise
+                            except (
+                                httpx.TransportError,
+                                TimeoutError,
+                                _IncompleteModelDownload,
+                                _ModelIntegrityError,
+                            ) as error:
+                                retry_error = error
+                            finally:
+                                partial.unlink(missing_ok=True)
+
+                            if retry_error is None:
                                 break
-                        else:
-                            raise OCRInitializationError("Too many model download redirects.")
+                            if attempt + 1 == MODEL_DOWNLOAD_ATTEMPTS:
+                                if isinstance(retry_error, _ModelIntegrityError):
+                                    raise OCRInitializationError(
+                                        "Model verification failed after repeated downloads. Retry later."
+                                    ) from None
+                                if isinstance(retry_error, _IncompleteModelDownload):
+                                    raise OCRInitializationError(
+                                        "Model download remained incomplete after retries. Check the connection and retry."
+                                    ) from None
+                                raise OCRInitializationError(
+                                    "Cannot download recognition models after retries. Check your connection, then retry."
+                                ) from None
+                            await asyncio.sleep(MODEL_RETRY_BACKOFF * (attempt + 1))
                 finally:
                     partial.unlink(missing_ok=True)
+
 
 
 class RapidEngine:

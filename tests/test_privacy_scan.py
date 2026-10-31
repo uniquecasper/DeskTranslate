@@ -91,4 +91,3 @@ def test_trusted_local_build_can_verify_exact_vendor_code(monkeypatch):
         trusted_local_build=True,
     )
     assert metadata and metadata["package"] == "numpy"
-

@@ -10,7 +10,7 @@ import json
 import multiprocessing as mp
 import os
 import shutil
-import subprocess
+import subprocess  # nosec B404  # Required shell-free process integration.
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -444,7 +444,7 @@ class TesseractEngine:
         start = time.perf_counter()
         flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
         try:
-            response = subprocess.run(
+            response = subprocess.run(  # nosec B603  # Resolved OCR binary; fixed argv and image bytes on stdin.
                 [
                     str(self.executable),
                     "stdin",

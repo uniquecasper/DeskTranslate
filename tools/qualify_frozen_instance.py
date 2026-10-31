@@ -6,7 +6,7 @@ import argparse
 import hashlib
 import json
 import os
-import subprocess
+import subprocess  # nosec B404  # Required shell-free process integration.
 import sys
 import tempfile
 import time
@@ -61,7 +61,7 @@ def qualify(program: Path) -> dict:
             stderr=subprocess.DEVNULL,
         )
         try:
-            primary = subprocess.Popen([str(program), "--demo"], **options)
+            primary = subprocess.Popen([str(program), "--demo"], **options)  # nosec B603  # Verified packaged app under test; no shell.
             deadline = time.monotonic() + 15
             while (
                 not (store.directory / "instance.lock").exists()
@@ -72,19 +72,19 @@ def qualify(program: Path) -> dict:
             if not (store.directory / "instance.lock").exists() or primary.poll() is not None:
                 raise RuntimeError("The owned frozen instance did not acquire its lock before timeout.")
             stage = "relaunch"
-            duplicate = subprocess.run([str(program), "--demo"], timeout=15, **options)
+            duplicate = subprocess.run([str(program), "--demo"], timeout=15, **options)  # nosec B603  # Same verified app and fixed argument.
             checks["relaunch_existing_frozen_owner"] = (
                 duplicate.returncode == 0 and primary.poll() is None
             )
             stage = "verification_isolation"
-            probe = subprocess.run([str(program), "--smoke-test"], timeout=15, **options)
+            probe = subprocess.run([str(program), "--smoke-test"], timeout=15, **options)  # nosec B603  # Same verified app and fixed argument.
             checks["verification_refuses_active_data_without_activation"] = (
                 probe.returncode == 1 and primary.poll() is None
             )
             stage = "dead_owner_recovery"
             primary.terminate()  # Only this owned, offscreen fixture is deliberately crashed.
             primary.wait(10)
-            recovery = subprocess.run([str(program), "--smoke-test"], timeout=20, **options)
+            recovery = subprocess.run([str(program), "--smoke-test"], timeout=20, **options)  # nosec B603  # Same verified app and fixed argument.
             checks["frozen_dead_owner_recovery"] = recovery.returncode == 0
             checks["ownership_removed_after_clean_exit"] = not (
                 store.directory / "instance.lock"

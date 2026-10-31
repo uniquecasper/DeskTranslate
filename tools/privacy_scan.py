@@ -10,7 +10,7 @@ import json
 import marshal
 import os
 import re
-import subprocess
+import subprocess  # nosec B404  # Required shell-free process integration.
 import types
 import zipfile
 from functools import lru_cache
@@ -163,7 +163,7 @@ def run(artifacts: bool, history: bool, artifact_root: Path | None = None) -> di
     tracked = (
         subprocess.check_output(
             ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"], cwd=ROOT
-        )
+        )  # nosec B603,B607  # Fixed Git argv; scans the local repository tree.
         .decode()
         .split("\0")
     )
@@ -175,11 +175,11 @@ def run(artifacts: bool, history: bool, artifact_root: Path | None = None) -> di
             counts["tree_files"] += 1
     if history:
         objects = (
-            subprocess.check_output(["git", "rev-list", "--objects", "--all"], cwd=ROOT)
+            subprocess.check_output(["git", "rev-list", "--objects", "--all"], cwd=ROOT)  # nosec B603,B607  # Fixed Git argv; scans local refs.
             .decode()
             .splitlines()
         )
-        process = subprocess.Popen(
+        process = subprocess.Popen(  # nosec B603,B607  # Fixed Git argv; pipes are consumed and closed below.
             ["git", "cat-file", "--batch"], cwd=ROOT, stdin=subprocess.PIPE, stdout=subprocess.PIPE
         )
         if process.stdin is None or process.stdout is None:

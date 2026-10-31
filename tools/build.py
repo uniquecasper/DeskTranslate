@@ -10,7 +10,7 @@ import os
 import platform
 import shutil
 import ssl
-import subprocess
+import subprocess  # nosec B404  # Required shell-free process integration.
 import sys
 import zipfile
 from pathlib import Path
@@ -158,7 +158,7 @@ def build(
             windows,
         )
     )
-    subprocess.run(args, cwd=ROOT, env=build_env, check=True)
+    subprocess.run(args, cwd=ROOT, env=build_env, check=True)  # nosec B603  # Fixed PyInstaller argv; no shell.
     dependencies = sorted(
         (
             d
@@ -317,7 +317,7 @@ def build(
         if signer:
             command.extend(["/DSignedBuild=1", "/SDeskTranslate=" + signer.inno_command()])
         command.append(str(ROOT / "packaging/installer.iss"))
-        subprocess.run(command, check=True, cwd=ROOT)
+        subprocess.run(command, check=True, cwd=ROOT)  # nosec B603  # Verified ISCC path and fixed compiler flags.
         setup = dist / f"DeskTranslate-{__version__}-Setup-x64.exe"
         if signer:
             signer.verify(setup)

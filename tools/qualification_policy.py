@@ -6,7 +6,7 @@ import argparse
 import contextlib
 import os
 import signal
-import subprocess
+import subprocess  # nosec B404  # Required shell-free process integration.
 import sys
 from pathlib import Path
 
@@ -19,7 +19,9 @@ def run_bounded_probe(
     label: str = "Manual probe",
 ) -> int:
     """A terminal Ctrl+C/timeout closes only the owned process tree."""
-    child = subprocess.Popen(
+    if not command or Path(command[0]).resolve() != Path(sys.executable).resolve():
+        raise ValueError("Bounded qualification probes must use the current Python interpreter.")
+    child = subprocess.Popen(  # nosec B603  # Interpreter is validated above; no shell is used.
         command,
         env=environment,
         cwd=cwd,

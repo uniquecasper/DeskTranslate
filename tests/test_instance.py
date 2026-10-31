@@ -1,5 +1,5 @@
 import os
-import subprocess
+import subprocess  # nosec B404  # Required shell-free process integration.
 import sys
 import time
 
@@ -213,7 +213,7 @@ instance = SingleInstance(Path(sys.argv[1]))
 assert not instance.acquire()
 raise SystemExit(0 if instance.notify() else 2)
 """
-    child = subprocess.Popen(
+    child = subprocess.Popen(  # nosec B603  # Test-owned Python snippet; no shell.
         [sys.executable, "-c", code, str(owner.directory)],
         creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
     )
@@ -271,7 +271,7 @@ def test_smoke_duplicate_does_not_activate_the_user_or_report_false_success(app,
     assert owner.acquire()
     environment = dict(os.environ, DESKTRANSLATE_DATA_DIR=str(tmp_path), QT_QPA_PLATFORM="windows")
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # nosec B603  # Test-owned Python snippet; no shell.
             [sys.executable, "-c", SAFE_SMOKE, "--smoke-test"],
             env=environment,
             capture_output=True,
@@ -349,14 +349,14 @@ raise SystemExit(main())
         FIXTURE_RESTORED=str(restored),
         FIXTURE_STOP=str(stop),
     )
-    primary = subprocess.Popen(
+    primary = subprocess.Popen(  # nosec B603  # Test-owned Python snippet; no shell.
         [sys.executable, "-c", observed, "--demo"],
         env=environment,
         creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
     )
     try:
         until(app, ready.exists, timeout=10)
-        duplicate = subprocess.run(
+        duplicate = subprocess.run(  # nosec B603  # Test-owned Python snippet; no shell.
             [sys.executable, "-c", SAFE_SMOKE, "--demo"],
             env=environment,
             capture_output=True,

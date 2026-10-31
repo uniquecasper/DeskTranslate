@@ -6,7 +6,7 @@ import multiprocessing
 import os
 import platform
 import shutil
-import subprocess
+import subprocess  # nosec B404  # Required shell-free process integration.
 import sys
 import time
 from pathlib import Path
@@ -99,7 +99,7 @@ def main():
         raise RuntimeError("The copied Japanese OCR models failed verification.")
     for path in (command_file, ready_file):
         path.unlink(missing_ok=True)
-    target = subprocess.Popen(
+    target = subprocess.Popen(  # nosec B603  # Current interpreter and this fixed qualification script.
         [sys.executable, str(Path(__file__).resolve()), "--interactive-desktop", "--target"],
         creationflags=subprocess.CREATE_NO_WINDOW,
     )

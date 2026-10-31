@@ -1,7 +1,7 @@
 import os
 import shutil
 import socket
-import subprocess
+import subprocess  # nosec B404  # Required shell-free process integration.
 import sys
 from pathlib import Path
 
@@ -107,7 +107,7 @@ sys.argv=[script]
 sys.path.insert(0,str(pathlib.Path(script).parent))
 runpy.run_path(script,run_name='__main__')
 """
-    result = subprocess.run(
+    result = subprocess.run(  # nosec B603  # Test-owned Python snippet; no shell.
         [sys.executable, "-c", bootstrap, str(root / "tools" / script)],
         cwd=root,
         capture_output=True,

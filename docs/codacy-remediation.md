@@ -5,10 +5,10 @@ This branch addresses findings exported from the ten analyzed branches. The expo
 ## Changes in this remediation
 
 - Replaced interpolated SQLite statements with fixed SQL text and parameter-bound values. The vocabulary table and its schema identifiers are module-owned constants; no user text is used as SQL syntax.
-- Replaced runtime and qualification `assert` statements with explicit errors so checks remain active under `python -O`.
+- Replaced runtime `assert` checks and selected qualification-helper assertions with explicit errors. This is limited to the paths changed in this remediation; the separate release workflow still contains assertions in OCR and endurance checks.
 - Kept the CSV formula-prefix rejection and documented why standard CSV quoting is appropriate after that validation.
 - Clarified the deterministic test PRNG, the empty pagination sentinel, and the HTTP handler parameter name.
-- Documented the reviewed trust boundary around reading marshalled code objects from a locally built, digest-matched PyInstaller vendor archive.
+- Restricted marshalled frozen-code inspection to an explicitly trusted local build. Externally supplied `--artifact-root` content is treated as untrusted and is never passed to `marshal.loads`; the local-build trust decision is explicit in CI.
 - Documented GitHub's `id-token: write` workflow permission as OIDC attestation permission, not a hard-coded credential.
 
 ## Findings requiring analyzer re-check
@@ -19,4 +19,4 @@ The Agentlinter report claiming that `CLAUDE_HANDOFF.md` is missing is inconsist
 
 ## Validation status
 
-This document does not claim tests have passed. Focused tests, full repository validation, Codacy re-analysis, and Windows-only qualification must run against this branch before the remediation is considered complete.
+The preceding PR head passed Windows CI (611 tests, packaged-runtime checks, and the artifact privacy scan) and its Codacy pull-request check reported zero new findings. The CodeRabbit follow-up fixes in this branch require a fresh CI and Codacy run. These are incremental pull-request checks; they do not establish that every historical finding on `main` has been eliminated.

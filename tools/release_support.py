@@ -278,3 +278,9 @@ def build_policy(
                 raise ValueError(
                     "Unsigned stable release requires explicit disclosure and approval"
                 )
+
+
+def require_release_condition(condition: bool, message: str) -> None:
+    """Fail a release qualification gate even when Python assertions are optimized out."""
+    if condition is not True:
+        raise RuntimeError(message)

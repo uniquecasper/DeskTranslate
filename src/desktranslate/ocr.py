@@ -213,7 +213,10 @@ class ModelManager:
                                         try:
                                             response.raise_for_status()
                                         except httpx.HTTPStatusError as error:
-                                            if error.response.status_code not in MODEL_RETRYABLE_STATUS_CODES:
+                                            if (
+                                                error.response.status_code
+                                                not in MODEL_RETRYABLE_STATUS_CODES
+                                            ):
                                                 raise
                                             raise _RetryableModelDownloadError(
                                                 "Temporary model server response"
@@ -337,7 +340,6 @@ class ModelManager:
                             await asyncio.sleep(MODEL_RETRY_BACKOFF * (attempt + 1))
                 finally:
                     partial.unlink(missing_ok=True)
-
 
 
 class RapidEngine:

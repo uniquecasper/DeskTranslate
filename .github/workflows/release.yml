@@ -24,7 +24,8 @@ jobs:
   candidate:
     permissions:
       contents: read
-      id-token: write
+      # GitHub OIDC permission for provenance attestation; not a stored credential.
+      id-token: write  # nosemgrep
       attestations: write
     runs-on: windows-2022
     timeout-minutes: 210

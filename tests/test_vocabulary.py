@@ -346,13 +346,13 @@ def test_deleted_id_is_never_reused(store):
 
 
 def test_deleted_text_is_not_left_in_database_files(store, path):
-    secret = "ZZ-unique-secret-term-ZZ"
-    entry = store.add(secret, "ZZ-unique-secret-translation-ZZ", "en", "tr")
+    marker = "ZZ-unique-opaque-term-marker-ZZ"
+    entry = store.add(marker, "ZZ-unique-opaque-translation-marker-ZZ", "en", "tr")
 
     store.delete(entry.id)
 
     for file in path.parent.iterdir():
-        assert b"ZZ-unique-secret" not in file.read_bytes()
+        assert b"ZZ-unique-opaque" not in file.read_bytes()
 
 
 # --- collection limit -----------------------------------------------------------------
@@ -481,11 +481,15 @@ def test_database_from_newer_schema_is_not_modified(tmp_path):
 
 
 def _make_database(path, statements, user_version):
+    if type(user_version) is not int or not -(2**31) <= user_version < 2**31:
+        raise ValueError("SQLite schema version fixture must be a 32-bit integer.")
     connection = sqlite3.connect(path)
     try:
         for statement in statements:
             connection.execute(statement)
-        connection.execute(f"PRAGMA user_version = {user_version}")
+        # PRAGMA user_version does not accept bound parameters. The exact-int
+        # validation above prevents the fixture value from changing SQL syntax.
+        connection.execute("PRAGMA user_version = " + str(user_version))  # nosec B608
         connection.commit()
     finally:
         connection.close()

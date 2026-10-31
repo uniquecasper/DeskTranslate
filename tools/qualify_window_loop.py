@@ -90,11 +90,13 @@ def main():
     os.environ["DESKTRANSLATE_DATA_DIR"] = str(AREA / "設定 data")
     models = ModelManager()
     source_models = ModelManager(args.model_data_directory)
-    assert source_models.installed("ja", verify=True)
+    if not source_models.installed("ja", verify=True):
+        raise RuntimeError("The source Japanese OCR models are not installed and verified.")
     models.directory.mkdir(parents=True, exist_ok=True)
     for name in source_models.required("ja"):
         shutil.copyfile(source_models.path(name), models.path(name))
-    assert models.installed("ja", verify=True)
+    if not models.installed("ja", verify=True):
+        raise RuntimeError("The copied Japanese OCR models failed verification.")
     for path in (command_file, ready_file):
         path.unlink(missing_ok=True)
     target = subprocess.Popen(
@@ -134,7 +136,8 @@ def main():
         ready = json.loads(ready_file.read_text())
         handle = ready["handle"]
         info = inspector.info(handle)
-        assert info and info.title == TITLE and info.pid == ready["pid"]
+        if info is None or info.title != TITLE or info.pid != ready["pid"]:
+            raise RuntimeError("The authored target window identity did not match its readiness record.")
         store = SettingsStore()
         store.save(
             Settings(
@@ -161,7 +164,8 @@ def main():
             and window.overlay.isVisible()
         )
         checks["main_remains_hidden"] = not window.isVisible()
-        assert all(checks.values())
+        if not all(checks.values()):
+            raise RuntimeError("The authored window loop failed its initial OCR visibility checks.")
         for action in ["move", "resize"]:
             old_count = count()
             old_region = window.pipeline.capture_region
@@ -178,7 +182,8 @@ def main():
                 and window.overlay.capture_region == current.client
                 and not window.isVisible()
             )
-            assert checks["actual_loop_follows_" + action]
+            if not checks["actual_loop_follows_" + action]:
+                raise RuntimeError(f"The capture loop did not follow the target window {action}.")
         command("minimize")
         wait(lambda: state() == SessionState.WAITING_TARGET, 20)
         checks["minimize_waits_without_main"] = not window.isVisible()
@@ -245,7 +250,8 @@ def main():
         json.dumps(report, indent=2) + "\n", encoding="utf-8", newline="\n"
     )
     print(json.dumps(report))
-    assert report["passed"]
+    if not report["passed"]:
+        raise SystemExit("The authored native window-loop qualification failed.")
 
 
 if __name__ == "__main__":

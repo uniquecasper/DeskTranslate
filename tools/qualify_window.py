@@ -52,7 +52,8 @@ def main() -> None:
 
     def pixels(name: str, reader: WindowCapture = capture) -> None:
         current = inspector.info(int(widgets[-1].winId()))
-        assert current is not None
+        if current is None:
+            raise RuntimeError("The authored target window disappeared during pixel qualification.")
         region = project_region(current.client, relative)
         image = reader.capture(region)
         checks[name] = (

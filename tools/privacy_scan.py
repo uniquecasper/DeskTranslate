@@ -118,7 +118,9 @@ def vendor_metadata(location: str, digest: str, data: bytes | None) -> dict[str,
         if digest != source_digest:
             return None
     else:
-        actual = marshal.loads(data)
+        # Only digest-matched code bytes extracted from our locally built PyInstaller archive
+        # reach this parser. This is not application or user supplied serialized data.
+        actual = marshal.loads(data)  # nosec B302  # nosemgrep
         expected = compile(path.read_bytes(), str(path), "exec", dont_inherit=True)
         if not isinstance(actual, types.CodeType) or normalized_code(actual) != normalized_code(
             expected
@@ -180,7 +182,8 @@ def run(artifacts: bool, history: bool, artifact_root: Path | None = None) -> di
         process = subprocess.Popen(
             ["git", "cat-file", "--batch"], cwd=ROOT, stdin=subprocess.PIPE, stdout=subprocess.PIPE
         )
-        assert process.stdin and process.stdout
+        if process.stdin is None or process.stdout is None:
+            raise RuntimeError("Git object inspection pipes were not created.")
         try:
             for entry in objects:
                 identity = entry.split(" ", 1)[0]

@@ -223,7 +223,8 @@ def benchmark(
                 )
                 report.setdefault("startup_ms", {})[language] = (time.perf_counter() - start) * 1000
                 current = family(sample)
-            assert engine is not None
+            if engine is None:
+                raise RuntimeError("The OCR benchmark engine was not initialized.")
             with Image.open(directory / (str(sample["id"]) + ".png")) as source:
                 image = source.convert("RGB")
             variants = []

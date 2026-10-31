@@ -46,7 +46,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         server: Server = self.server
         data = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
-        assert data["messages"] and data["model"] == "authored-fixture"
+        if not data["messages"] or data["model"] != "authored-fixture":
+            raise RuntimeError("The local HTTP fixture received an unexpected request payload.")
         server.requests += 1
         status = 503 if server.failures else 200
         body = json.dumps({"choices": [{"message": {"content": server.reply}}]}).encode()
@@ -172,9 +173,12 @@ def qualify(models: Path) -> dict:
                 started = time.perf_counter()
                 window.start(True)
                 wait_for(app, lambda: window.latest == server.reply and not window.timer.isActive())
-                assert window.result_source.text() == "明日、またここで会おう。"
-                assert window.overlay.translation.text() == server.reply
-                assert "complete" in window.session_status.text()
+                if window.result_source.text() != "明日、またここで会おう。":
+                    raise RuntimeError("The one-shot OCR result did not match the authored source fixture.")
+                if window.overlay.translation.text() != server.reply:
+                    raise RuntimeError("The one-shot translation was not delivered to the overlay.")
+                if "complete" not in window.session_status.text():
+                    raise RuntimeError("The one-shot session did not report completion.")
                 report["one_shot_ms"] = round((time.perf_counter() - started) * 1000, 2)
                 report["checks"]["one_shot_real_ocr_http_overlay"] = True
                 started = time.perf_counter()
@@ -191,7 +195,8 @@ def qualify(models: Path) -> dict:
                 while time.monotonic() < until:
                     app.processEvents()
                     time.sleep(0.01)
-                assert capture.count == count and window.pause_button.text() == "Resume"
+                if capture.count != count or window.pause_button.text() != "Resume":
+                    raise RuntimeError("Pause did not suppress capture or update its control label.")
                 # Static content is deliberately not retranslated on resume. A new
                 # authored line must nevertheless make it through every stage.
                 capture.image = Image.open(ROOT / "tests/fixtures/ja-multiline.png").convert("RGB")
@@ -206,7 +211,8 @@ def qualify(models: Path) -> dict:
                 window.start(False)
                 wait_for(app, lambda: window.pipeline.session.state == SessionState.ERROR)
                 wait_for(app, lambda: window.pause_button.text() == "Retry translation")
-                assert window.pause_button.isEnabled()
+                if not window.pause_button.isEnabled():
+                    raise RuntimeError("Retry remained disabled after the fixture HTTP outage.")
                 server.failures = False
                 started = time.perf_counter()
                 window.pause_button.click()
@@ -217,28 +223,29 @@ def qualify(models: Path) -> dict:
                 capture.image = Image.open(ROOT / "tests/fixtures/en-ui.png").convert("RGB")
                 server.reply = "翻訳する領域を選択してください。"
                 window.swap_languages()
-                assert window.pipeline is None
+                if window.pipeline is not None:
+                    raise RuntimeError("The previous translation pipeline was not stopped before language switching.")
                 started = time.perf_counter()
                 window.start(True)
                 wait_for(app, lambda: window.latest == server.reply and not window.timer.isActive())
-                assert window.result_source.text() == "Select a region to translate."
+                if window.result_source.text() != "Select a region to translate.":
+                    raise RuntimeError("The switched-language OCR source did not match its fixture.")
                 report["language_switch_result_ms"] = round(
                     (time.perf_counter() - started) * 1000, 2
                 )
                 report["checks"]["atomic_language_change_actual_ocr"] = True
                 window.stop()
                 wait_for(app, lambda: not window.retiring and not window.timer.isActive())
-                assert window.pipeline is None and not window.pause_button.isEnabled()
+                if window.pipeline is not None or window.pause_button.isEnabled():
+                    raise RuntimeError("Stopping did not clear the pipeline and disable pause.")
                 restored = store.load()
-                assert (restored.source, restored.target, restored.provider) == (
-                    "en",
-                    "ja",
-                    "custom",
-                )
-                assert not any(
+                if (restored.source, restored.target, restored.provider) != ("en", "ja", "custom"):
+                    raise RuntimeError("The product probe did not preserve the selected language/provider settings.")
+                if any(
                     word in (Path(directory) / "settings.json").read_text(encoding="utf-8")
                     for word in ("明日", "Select a region", server.reply)
-                )
+                ):
+                    raise RuntimeError("Translation/OCR content was unexpectedly persisted in settings.")
                 report["checks"]["stop_cleanup_preferences_without_content_retention"] = True
                 window.quit()
                 wait_for(app, lambda: not window.shutdown_timer.isActive())

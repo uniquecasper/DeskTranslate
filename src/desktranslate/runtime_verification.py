@@ -31,7 +31,7 @@ def verify_credentials(credentials: CredentialStore, account: str) -> dict[str, 
 
 def verify_http_provider() -> bool:
     class Handler(BaseHTTPRequestHandler):
-        def log_message(self, format: str, *args: object) -> None:
+        def log_message(self, format_string: str, *args: object) -> None:
             pass
 
         def do_POST(self) -> None:

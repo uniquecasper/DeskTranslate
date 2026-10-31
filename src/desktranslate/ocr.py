@@ -549,7 +549,8 @@ class IsolatedOCR:
             if os.name == "nt":
                 from desktranslate.processes import ProcessJob
 
-                assert self.process.pid is not None
+                if self.process.pid is None:
+                    raise RuntimeError("OCR worker process has no process identifier.")
                 self.job = ProcessJob(self.process.pid)
             self.connection.send("initialize")
         except Exception:

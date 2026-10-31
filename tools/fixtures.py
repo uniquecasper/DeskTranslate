@@ -344,4 +344,5 @@ def render_fixture(sample: dict, destination: Path) -> None:
         )
     if not image.save(str(destination)):
         raise OSError("Could not write authored fixture")
-    assert FIXTURE_APP is not None
+    if FIXTURE_APP is None:
+        raise RuntimeError("The Qt fixture application must be initialized before rendering.")

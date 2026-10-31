@@ -69,7 +69,8 @@ def qualify(program: Path) -> dict:
                 and time.monotonic() < deadline
             ):
                 time.sleep(0.05)
-            assert (store.directory / "instance.lock").exists() and primary.poll() is None
+            if not (store.directory / "instance.lock").exists() or primary.poll() is not None:
+                raise RuntimeError("The owned frozen instance did not acquire its lock before timeout.")
             stage = "relaunch"
             duplicate = subprocess.run([str(program), "--demo"], timeout=15, **options)
             checks["relaunch_existing_frozen_owner"] = (

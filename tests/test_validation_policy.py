@@ -239,6 +239,14 @@ def test_frozen_probe_refuses_installer_before_process_execution(tmp_path, monke
         qualify(tmp_path / "Setup.exe")
 
 
+def test_probe_output_escapes_characters_unsupported_by_windows_console():
+    from tools.qualification_policy import console_safe_text
+
+    assert console_safe_text("日本語", "cp1252") == r"\u65e5\u672c\u8a9e"
+    assert console_safe_text("plain ASCII", "cp1252") == "plain ASCII"
+    assert console_safe_text("日本語", None) == "日本語"
+
+
 @pytest.mark.skipif(os.name != "nt", reason="Owned Windows supervisor lifecycle")
 def test_manual_probe_timeout_terminates_owned_worker_tree(monkeypatch, tmp_path):
     monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1] / "tools"))

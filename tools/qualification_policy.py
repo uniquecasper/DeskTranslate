@@ -11,6 +11,12 @@ import sys
 from pathlib import Path
 
 
+def console_safe_text(value: str, encoding: str | None) -> str:
+    """Keep captured UTF-8 probe output printable on legacy Windows consoles."""
+    selected = encoding or "utf-8"
+    return value.encode(selected, errors="backslashreplace").decode(selected)
+
+
 def run_bounded_probe(
     command: list[str],
     environment: dict[str, str],
@@ -63,7 +69,11 @@ def run_bounded_probe(
         if child.stdout:
             child.stdout.close()
         if output:
-            print(output, end="", flush=True)
+            # Windows console encodings such as cp1252 cannot represent all OCR fixture text.
+            # Escape only characters unsupported by the active console encoding.
+            encoding = sys.stdout.encoding or "utf-8"
+            printable = console_safe_text(output, encoding)
+            print(printable, end="", flush=True)
 
 
 def require_interactive_desktop() -> None:

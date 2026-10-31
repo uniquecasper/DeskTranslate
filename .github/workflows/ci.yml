@@ -6,6 +6,7 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+  checks: read
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -62,6 +63,52 @@ jobs:
           if ($process.ExitCode -ne 0) { throw 'Frozen runtime verification failed' }
       - name: Artifact privacy gate
         run: python tools/privacy_scan.py --history --artifacts --output docs/privacy-scan.json
+      - name: Capture Codacy check annotations
+        if: github.event_name == 'pull_request'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          $headers = @{
+            Authorization = "Bearer $env:GH_TOKEN"
+            Accept = "application/vnd.github+json"
+            "X-GitHub-Api-Version" = "2022-11-28"
+          }
+          $base = "https://api.github.com/repos/$env:GITHUB_REPOSITORY"
+          $codacy = $null
+          for ($attempt = 0; $attempt -lt 12; $attempt++) {
+            $result = Invoke-RestMethod -Headers $headers -Uri "$base/commits/$env:HEAD_SHA/check-runs?per_page=100"
+            $codacy = $result.check_runs |
+              Where-Object { $_.name -eq "Codacy Static Code Analysis" } |
+              Sort-Object completed_at -Descending |
+              Select-Object -First 1
+            if ($codacy -and $codacy.status -eq "completed") { break }
+            Start-Sleep -Seconds 10
+          }
+          if (-not $codacy -or $codacy.status -ne "completed") {
+            $document = @{
+              available = $false
+              reason = "Codacy check did not complete during the annotation collection window."
+              annotations = @()
+            }
+            Write-Warning $document.reason
+          } else {
+            $annotations = @(
+              Invoke-RestMethod -Headers $headers -Uri "$base/check-runs/$($codacy.id)/annotations?per_page=100"
+            )
+            $document = @{
+              available = $true
+              check_run_id = $codacy.id
+              conclusion = $codacy.conclusion
+              annotations = $annotations
+            }
+            foreach ($annotation in $annotations) {
+              Write-Host ("{0}:{1}-{2} [{3}] {4}: {5}" -f $annotation.path, $annotation.start_line, $annotation.end_line, $annotation.annotation_level, $annotation.title, $annotation.message)
+            }
+            Write-Host "Collected $($annotations.Count) Codacy annotations."
+          }
+          $document | ConvertTo-Json -Depth 20 | Set-Content -Path .audit/codacy-annotations.json -Encoding utf8
       - name: Preserve quality evidence
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -72,6 +119,7 @@ jobs:
             .audit/dependency-audit.json
             .audit/packaged-runtime.json
             .audit/packaged-instance.json
+            .audit/codacy-annotations.json
             docs/privacy-scan.json
           retention-days: 14
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9

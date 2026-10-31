@@ -83,6 +83,7 @@ def main() -> int:
             30,
             cwd=ROOT,
             label="Frozen smoke",
+            allowed_executable=args.frozen.resolve(),
         )
     return 0
 

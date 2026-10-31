@@ -23,10 +23,18 @@ def run_bounded_probe(
     timeout: float,
     cwd: Path | None = None,
     label: str = "Manual probe",
+    allowed_executable: Path | None = None,
 ) -> int:
     """A terminal Ctrl+C/timeout closes only the owned process tree."""
-    if not command or Path(command[0]).resolve() != Path(sys.executable).resolve():
-        raise ValueError("Bounded qualification probes must use the current Python interpreter.")
+    executable = Path(command[0]).resolve() if command else None
+    python_executable = Path(sys.executable).resolve()
+    explicitly_allowed = (
+        allowed_executable is not None and executable == allowed_executable.resolve()
+    )
+    if executable != python_executable and not explicitly_allowed:
+        raise ValueError(
+            "Bounded probes must use the current Python interpreter or an explicitly approved executable."
+        )
     child = subprocess.Popen(  # nosec B603  # Interpreter is validated above; no shell is used.  # nosemgrep
         command,  # nosemgrep
         env=environment,

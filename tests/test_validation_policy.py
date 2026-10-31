@@ -239,6 +239,18 @@ def test_frozen_probe_refuses_installer_before_process_execution(tmp_path, monke
         qualify(tmp_path / "Setup.exe")
 
 
+def test_bounded_probe_rejects_executable_without_explicit_approval(tmp_path):
+    from tools.qualification_policy import run_bounded_probe
+
+    unapproved = tmp_path / "unapproved.exe"
+    with pytest.raises(ValueError, match="explicitly approved executable"):
+        run_bounded_probe(
+            [str(unapproved), "--smoke-test"],
+            dict(os.environ),
+            1,
+        )
+
+
 def test_probe_output_escapes_characters_unsupported_by_windows_console():
     from tools.qualification_policy import console_safe_text
 

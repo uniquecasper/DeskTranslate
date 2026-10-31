@@ -146,7 +146,7 @@ jobs:
             dist/**/*.exe
             dist/**/*.zip
           verify: true
-          verify-cert-identity: https://github.com/uniquecasper/DeskTranslate/.github/workflows/release.yml@(${{ github.ref }})
+          verify-cert-identity: https://github.com/uniquecasper/DeskTranslate/.github/workflows/release.yml@${{ github.ref }}
           verify-oidc-issuer: https://token.actions.githubusercontent.com
       - name: Attest hosted build artifacts
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6

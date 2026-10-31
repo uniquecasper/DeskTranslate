@@ -240,9 +240,9 @@ class ModelManager:
                                             raise OCRInitializationError(
                                                 "Invalid language pack download size."
                                             )
-                                        if (
-                                            type(expected_size) is int
-                                            and not 0 <= expected_size <= 100_000_000
+                                        if expected_size is not None and (
+                                            type(expected_size) is not int
+                                            or not 0 <= expected_size <= 100_000_000
                                         ):
                                             raise OCRInitializationError(
                                                 "Invalid language pack manifest size."

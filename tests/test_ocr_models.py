@@ -294,9 +294,7 @@ def test_cancelled_model_download_removes_partial_file(tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize("size", [-1, 100_000_001, "7", True])
-def test_invalid_manifest_model_size_is_rejected_before_network(
-    tmp_path, monkeypatch, size
-):
+def test_invalid_manifest_model_size_is_rejected_before_network(tmp_path, monkeypatch, size):
     manager = ModelManager(tmp_path)
     manager.catalog = {
         key: {

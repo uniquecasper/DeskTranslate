@@ -56,7 +56,8 @@ def evaluate(models: Path) -> dict:
                 if not path.exists():
                     path = Path(temporary) / (case["id"] + ".png")
                     render_fixture(dict(case, bg="#172736", fg="white"), path)
-                assert engine is not None
+                if engine is None:
+                    raise RuntimeError("The OCR confidence engine was not initialized.")
                 result = engine.recognize(
                     Image.open(path).convert("RGB"), code, bool(case.get("vertical"))
                 )

@@ -48,3 +48,46 @@ def test_published_bidi_build_path_requires_exact_wheel_binary(monkeypatch):
     assert vendor_metadata(location, hashlib.sha256(binary + b"changed").hexdigest(), None) is None
     assert vendor_metadata("tree/src/app.py", digest, None) is None
     assert vendor_metadata("app/_internal/other/bidi.cp312-win_amd64.pyd", digest, None) is None
+
+
+def test_untrusted_frozen_bytes_are_never_unmarshalled(monkeypatch):
+    from pathlib import Path
+
+    import tools.privacy_scan as scanner
+
+    monkeypatch.setattr(
+        scanner,
+        "verified_vendor_source",
+        lambda package, relative: (Path(__file__), "0" * 64, "test-version"),
+    )
+
+    def forbidden(_data):
+        raise AssertionError("Untrusted frozen bytes must not reach marshal.loads")
+
+    monkeypatch.setattr(scanner.marshal, "loads", forbidden)
+    assert (
+        scanner.vendor_metadata("frozen/numpy.__config__", "0" * 64, b"attacker-controlled bytes")
+        is None
+    )
+
+
+def test_trusted_local_build_can_verify_exact_vendor_code(monkeypatch):
+    from pathlib import Path
+
+    import tools.privacy_scan as scanner
+
+    source_path = Path(__file__)
+    monkeypatch.setattr(
+        scanner,
+        "verified_vendor_source",
+        lambda package, relative: (source_path, "0" * 64, "test-version"),
+    )
+    expected = compile(source_path.read_bytes(), str(source_path), "exec", dont_inherit=True)
+    monkeypatch.setattr(scanner.marshal, "loads", lambda _data: expected)
+    metadata = scanner.vendor_metadata(
+        "frozen/numpy.__config__",
+        "0" * 64,
+        b"trusted local frozen-code fixture",
+        trusted_local_build=True,
+    )
+    assert metadata and metadata["package"] == "numpy"

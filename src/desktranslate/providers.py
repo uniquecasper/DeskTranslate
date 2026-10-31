@@ -543,7 +543,7 @@ class GeminiProvider(HTTPProvider):
 
     def models(self) -> list[ModelInfo]:
         catalog: list[ModelInfo] = []
-        token = ""
+        token: str | None = None
         for _ in range(10):
             data = self.call(
                 "GET",
@@ -561,7 +561,7 @@ class GeminiProvider(HTTPProvider):
                     for m in catalog_entries(data.get("models", []))
                     if "generateContent" in m.get("supportedGenerationMethods", [])
                 )
-                token = data.get("nextPageToken", "")
+                token = data.get("nextPageToken") or None
                 if not token:
                     break
             except (KeyError, TypeError, ValueError, AttributeError):

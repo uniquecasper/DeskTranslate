@@ -91,7 +91,8 @@ class VocabularySaveDialog(QDialog):
             QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel
         )
         save_button = buttons.button(QDialogButtonBox.StandardButton.Save)
-        assert save_button is not None
+        if save_button is None:
+            raise RuntimeError("The vocabulary dialog could not create its Save button.")
         if self.source_language_combo is not None:
             source_language_combo = self.source_language_combo
             save_button.setEnabled(False)

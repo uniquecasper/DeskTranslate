@@ -1,65 +1,38 @@
-# Active assignment — Windows 2.0.1 release candidate
+# Active assignment — DeskTranslate 2.0.1 qualification and integration
 
 Updated: 2026-10-31
 
-**This is the active task for this branch.** The vocabulary-learning workstream documented below is paused and must not be continued as part of this assignment.
+**This is the active project handoff.** The Windows 2.0.1 candidate and the security remediation must be integrated and qualified together.
 
 - Repository: `uniquecasper/DeskTranslate`
-- Branch: `claude/windows-installer-2-0-1`
-- Pull request: [#5](https://github.com/uniquecasper/DeskTranslate/pull/5)
-- Scope: finish Windows 2.0.1 release-candidate qualification only. Do not work on Android/APK.
-- Do not merge to `main`, create a release tag, or publish a release.
+- Candidate branch: `claude/windows-installer-2-0-1`
+- Security remediation branch: `fix/codacy-security-remediation`
+- Pull requests: [#4](https://github.com/uniquecasper/DeskTranslate/pull/4) (already merged), [#5](https://github.com/uniquecasper/DeskTranslate/pull/5), [#6](https://github.com/uniquecasper/DeskTranslate/pull/6)
+- Active scope: merge the security remediation into the Windows 2.0.1 candidate, qualify the exact candidate, then merge the completed PR into `main`.
+- Do not create a stable tag or publish a 2.0.1 release as part of candidate qualification.
 
-## Responsibility
+## Current acceptance requirements
 
-- ChatGPT handles coordination, factual evidence review, release-status documentation and this handoff.
-- Claude Code handles workflow/build/qualification implementation changes and code-level tests.
-- The maintainer makes all merge, stable-promotion and unsigned-publication decisions.
+1. Keep the PR #6 SQL parameterization, runtime assertion replacements, executable-launch policy, privacy-scan trust boundary, CI Codacy evidence capture and documentation.
+2. Keep the PR #5 application/manifest version at 2.0.1.
+3. Download the official DeskTranslate v2.0.0 installer and verify SHA-256
+   `2c2aab018c7e34b38fe4b04f3ffb099c6707fbd63d14dbd21546effe43443fe5` before running it.
+4. Prove the installed previous executable and uninstall metadata both identify version 2.0.0, then upgrade to 2.0.1 and verify settings/models remain unchanged.
+5. Run the 7,200-second steady and 1,800-second chaos endurance workloads on the exact packaged candidate. Validate version, Python runtime, source/assets, harness hash, completion, resource qualification and worker cleanup.
+6. Keep stable-release evidence separate. The existing manual qualification and unsigned approval describe v2.0.0 and must not be reused for v2.0.1.
+7. Preserve the distinction between hosted offscreen qualification and native consumer-PC checks that remain NOT TESTED.
 
-## Verified previous installer
+## Responsibility and merge policy
 
-The official upstream GitHub release record for v2.0.0 lists:
+Project coordination, repository edits, evidence review and PR integration are performed directly against the connected GitHub repository. No external coding assistant is required for this handoff.
 
-- URL: https://github.com/DeskTranslate/DeskTranslate/releases/download/v2.0.0/DeskTranslate-2.0.0-Setup-x64.exe
-- Expected SHA-256: `2c2aab018c7e34b38fe4b04f3ffb099c6707fbd63d14dbd21546effe43443fe5`
+Merge only after the candidate branch's Windows quality workflow and full release-candidate qualification workflow have succeeded on the final combined commit. Merge PR #5 with a merge commit so the PR #6 history remains reachable; then verify GitHub records PR #6 as merged. PR #4 is already merged.
 
-Download this exact asset, verify its SHA-256 before execution, and pass it to
-`tools/qualify_installer.ps1 -PreviousInstaller`. Do not execute an unverified file.
-The expected hash and qualification status are also recorded in
-[`docs/windows-2.0.1-qualification-status.md`](docs/windows-2.0.1-qualification-status.md).
+The upstream v2.0.0 release asset is the only approved previous-installer fixture. Do not run a downloaded installer unless the SHA-256 matches the value above.
 
-## Implementation task
+## Evidence reporting
 
-1. Wire the verified previous installer into the release-candidate workflow and
-   require a genuine 2.0.0-to-2.0.1 upgrade. Preserve/check user settings and
-   existing models. A same-version reinstall is not an upgrade test.
-2. Make the 7,200-second steady and 1,800-second fault/chaos endurance checks
-   runnable for the exact 2.0.1 candidate. Record and validate version, source/assets,
-   Python 3.12.15 and `tools/soak.py` hashes; incomplete or mismatched reports fail.
-3. Fix the release-gate ordering. The current pre-deployment step invokes
-   `stable_gate` before hosted endurance reports exist, and hosted report names
-   differ from the filenames consumed by `stable_gate`. Design a safe staged flow:
-   qualification build → all required evidence → exact-source/runtime evidence
-   validation → stable gate → final artifact verification. Never reuse 2.0.0
-   qualification/soak reports as 2.0.1 evidence.
-4. Keep `docs/manual-qualification.json` truthful. Do not mark a gate true without
-   matching evidence; leave unavailable physical display/DPI/media checks NOT TESTED.
-5. Do not inherit the 2.0.0 unsigned-release approval. No publisher certificate is
-   configured in the observed candidate run. Leave 2.0.1 unsigned stable approval
-   unset unless the maintainer explicitly authorizes it. Never self-sign or claim
-   publisher identity without a trusted certificate.
-
-## Acceptance and reporting
-
-- Existing 2.0.1 Windows CI, packaged startup, portable/installer qualification,
-  SHA-256, SBOM, provenance and privacy checks remain required.
-- Genuine previous-installer upgrade evidence is required.
-- Both endurance workloads must complete and match the exact candidate source,
-  runtime and harness hashes.
-- Stable promotion must fail closed on missing, stale, false or mismatched evidence.
-- Report changed files, exact commands, run IDs and actual results. Do not claim
-  unrun tests passed.
-- Keep PR #5 as a draft; do not merge, tag or publish.
+Record exact commit SHAs, workflow run IDs, artifact digests, test counts and limitations. Do not call skipped or untested checks passed. An internal qualification artifact is not a stable release.
 
 ---
 

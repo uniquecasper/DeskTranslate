@@ -188,7 +188,8 @@ def export_glossary(glossary: dict[str, str], csv_format: bool = False) -> str:
             "A glossary term could be interpreted as a spreadsheet formula. Export JSON to preserve it safely."
         )
     buffer = io.StringIO()
-    writer = csv.writer(buffer)
+    # Formula-like cells are rejected above; csv.writer only performs CSV quoting.
+    writer = csv.writer(buffer)  # nosemgrep
     writer.writerow(["source", "translation"])
     writer.writerows(glossary.items())
     return buffer.getvalue()

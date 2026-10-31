@@ -139,6 +139,15 @@ jobs:
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python -c "import hashlib,json; from pathlib import Path; from desktranslate import __version__; from tools.release_support import runtime_source_hashes,require_release_condition; r=json.loads(Path('docs/soak-chaos-hosted.json').read_text()); q=r.get('resource_qualification'); checks=(r.get('version')==__version__ and r.get('requested_duration_s')==1800 and r.get('mode')=='chaos' and r.get('python_version')=='3.12.15' and r.get('completed') is True and r.get('elapsed_s',0)>=1800 and r.get('real_ocr') is True and r.get('synthetic_capture') is True and r.get('loopback_http') is True and r.get('workload_passed') is True and r.get('injected_http_faults',0)>0 and r.get('session_restarts',0)>0 and r.get('source_unchanged') is True and r.get('source_hashes')==runtime_source_hashes(Path.cwd()) and r.get('harness_unchanged') is True and r.get('harness_sha256')==hashlib.sha256(Path('tools/soak.py').read_bytes()).hexdigest() and r.get('workers_closed') is True and r.get('remaining_children')==0 and isinstance(q,dict) and q.get('qualified') is True); require_release_condition(checks,'Thirty-minute chaos endurance report is incomplete or does not match this exact candidate')"
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Sign and verify Windows executables and portable archives with Sigstore
+        uses: sigstore/gh-action-sigstore-python@5b79a39c381910c090341a2c9b0bf022c8b387e1 # v3.4.0
+        with:
+          inputs: |
+            dist/**/*.exe
+            dist/**/*.zip
+          verify: true
+          verify-cert-identity: https://github.com/uniquecasper/DeskTranslate/.github/workflows/release.yml@${{ github.ref }}
+          verify-oidc-issuer: https://token.actions.githubusercontent.com
       - name: Attest hosted build artifacts
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6
         with:
@@ -163,6 +172,7 @@ jobs:
             dist/*.zip
             dist/*sbom.json
             dist/*provenance.json
+            dist/**/*.sigstore.json
             dist/SHA256SUMS.txt
             docs/installer-qualification.json
             docs/portable-qualification.json

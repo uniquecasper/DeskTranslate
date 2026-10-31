@@ -21,7 +21,7 @@ def test_closing_ocr_job_terminates_external_engine_descendants(tmp_path):
         "creationflags=subprocess.CREATE_NO_WINDOW); "
         "pathlib.Path(sys.argv[1]).write_text(str(child.pid)); time.sleep(30)"
     )
-    parent = subprocess.Popen(  # nosec B603  # Test-owned Python child and nested fixture; no shell.
+    parent = subprocess.Popen(  # nosec B603  # Test-owned Python child and nested fixture; no shell.  # nosemgrep
         [sys.executable, "-c", helper, str(pid_path)],
         stdin=subprocess.PIPE,
         creationflags=subprocess.CREATE_NO_WINDOW,

@@ -21,8 +21,8 @@ def run_bounded_probe(
     """A terminal Ctrl+C/timeout closes only the owned process tree."""
     if not command or Path(command[0]).resolve() != Path(sys.executable).resolve():
         raise ValueError("Bounded qualification probes must use the current Python interpreter.")
-    child = subprocess.Popen(  # nosec B603  # Interpreter is validated above; no shell is used.
-        command,
+    child = subprocess.Popen(  # nosec B603  # Interpreter is validated above; no shell is used.  # nosemgrep
+        command,  # nosemgrep
         env=environment,
         cwd=cwd,
         creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,

@@ -201,6 +201,23 @@ def test_frozen_process_probe_requires_opt_in_before_launching_anything(tmp_path
     assert not output.exists()
 
 
+def test_frozen_probe_refuses_executable_outside_repository_build(tmp_path):
+    import json
+
+    from tools.qualify_frozen_instance import qualify
+    from desktranslate import __version__
+
+    program = tmp_path / "DeskTranslate.exe"
+    program.write_bytes(b"not executed")
+    (tmp_path / "build-info.json").write_text(
+        json.dumps({"version": __version__, "source_sha256": "0" * 64}), encoding="utf-8"
+    )
+    (tmp_path / "managed-runtime.txt").write_text("authored marker", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="current repository"):
+        qualify(program)
+
+
 def test_frozen_probe_refuses_installer_before_process_execution(tmp_path, monkeypatch):
     import json
 

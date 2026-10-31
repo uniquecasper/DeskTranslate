@@ -444,8 +444,8 @@ class TesseractEngine:
         start = time.perf_counter()
         flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
         try:
-            response = subprocess.run(  # nosec B603  # Resolved OCR binary; fixed argv and image bytes on stdin.
-                [
+            response = subprocess.run(  # nosec B603  # Resolved OCR binary; fixed argv and image bytes on stdin.  # nosemgrep
+                [  # nosemgrep
                     str(self.executable),
                     "stdin",
                     "stdout",

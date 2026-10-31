@@ -99,7 +99,7 @@ def main():
         raise RuntimeError("The copied Japanese OCR models failed verification.")
     for path in (command_file, ready_file):
         path.unlink(missing_ok=True)
-    target = subprocess.Popen(  # nosec B603  # Current interpreter and this fixed qualification script.
+    target = subprocess.Popen(  # nosec B603  # Current interpreter and this fixed qualification script.  # nosemgrep
         [sys.executable, str(Path(__file__).resolve()), "--interactive-desktop", "--target"],
         creationflags=subprocess.CREATE_NO_WINDOW,
     )

@@ -65,12 +65,9 @@ def test_untrusted_frozen_bytes_are_never_unmarshalled(monkeypatch):
         raise AssertionError("Untrusted frozen bytes must not reach marshal.loads")
 
     monkeypatch.setattr(scanner.marshal, "loads", forbidden)
-    assert (
-        scanner.vendor_metadata(
-            "frozen/numpy.__config__", "0" * 64, b"attacker-controlled bytes"
-        )
-        is None
-    )
+    assert scanner.vendor_metadata(
+        "frozen/numpy.__config__", "0" * 64, b"attacker-controlled bytes"
+    ) is None
 
 
 def test_trusted_local_build_can_verify_exact_vendor_code(monkeypatch):

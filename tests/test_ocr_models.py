@@ -7,7 +7,7 @@ from threading import Event
 import httpx
 import pytest
 
-from desktranslate.errors import OCRInitializationError
+from desktranslate.errors import Cancelled, OCRInitializationError
 from desktranslate.ocr import ModelManager
 
 
@@ -191,3 +191,109 @@ def test_model_download_is_bounded_identity_and_atomic(tmp_path, monkeypatch, co
         manager.install("ja", Event(), lambda *args: None)
         assert manager.installed("ja", verify=True)
     assert not list(tmp_path.glob("*.part"))
+
+
+
+@pytest.mark.parametrize("failure", ["http", "connect"])
+def test_transient_model_download_failure_is_retried(tmp_path, monkeypatch, failure):
+    manager = ModelManager(tmp_path)
+    manager.catalog = {
+        key: {
+            "filename": key + ".onnx",
+            "url": "https://models.example/" + key,
+            "sha256": hashlib.sha256(b"correct").hexdigest(),
+        }
+        for key in manager.required("ja")
+    }
+    original = httpx.AsyncClient
+    requests = 0
+
+    def response(request):
+        nonlocal requests
+        requests += 1
+        if requests == 1 and failure == "http":
+            return httpx.Response(503, content=b"temporarily unavailable")
+        if requests == 1:
+            raise httpx.ConnectError("temporary connection failure", request=request)
+        return httpx.Response(200, content=b"correct")
+
+    def client(**kwargs):
+        return original(transport=httpx.MockTransport(response), **kwargs)
+
+    monkeypatch.setattr(httpx, "AsyncClient", client)
+    manager.install("ja", Event(), lambda *args: None)
+
+    assert requests == len(manager.required("ja")) + 1
+    assert manager.installed("ja", verify=True)
+    assert not list(tmp_path.glob("*.part"))
+
+
+def test_incomplete_content_length_retries_and_preserves_existing_model(
+    tmp_path, monkeypatch
+):
+    manager = ModelManager(tmp_path)
+    manager.catalog = {
+        key: {
+            "filename": key + ".onnx",
+            "url": "https://models.example/" + key,
+            "sha256": hashlib.sha256(b"correct").hexdigest(),
+        }
+        for key in manager.required("ja")
+    }
+    target = manager.path(manager.required("ja")[0])
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(b"previous-model")
+    original = httpx.AsyncClient
+    requests = 0
+
+    def response(_request):
+        nonlocal requests
+        requests += 1
+        return httpx.Response(
+            200, content=b"correct", headers={"Content-Length": "99"}
+        )
+
+    def client(**kwargs):
+        return original(transport=httpx.MockTransport(response), **kwargs)
+
+    monkeypatch.setattr(httpx, "AsyncClient", client)
+    with pytest.raises(OCRInitializationError, match="incomplete"):
+        manager.install("ja", Event(), lambda *args: None)
+
+    assert requests == 3
+    assert target.read_bytes() == b"previous-model"
+    assert not list(tmp_path.glob("*.part"))
+
+
+def test_cancelled_model_download_removes_partial_file(tmp_path, monkeypatch):
+    manager = ModelManager(tmp_path)
+    manager.catalog = {
+        key: {
+            "filename": key + ".onnx",
+            "url": "https://models.example/" + key,
+            "sha256": hashlib.sha256(b"correct").hexdigest(),
+        }
+        for key in manager.required("ja")
+    }
+    original = httpx.AsyncClient
+
+    def client(**kwargs):
+        return original(
+            transport=httpx.MockTransport(
+                lambda request: httpx.Response(200, content=b"correct")
+            ),
+            **kwargs,
+        )
+
+    monkeypatch.setattr(httpx, "AsyncClient", client)
+    cancel = Event()
+
+    def progress(model, _downloaded, _total):
+        if model == "det":
+            cancel.set()
+
+    with pytest.raises(Cancelled):
+        manager.install("ja", cancel, progress)
+
+    assert not list(tmp_path.glob("*.part"))
+    assert not manager.installed("ja")

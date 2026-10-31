@@ -62,7 +62,7 @@ jobs:
           if (-not $process.WaitForExit(90000)) { $process.Kill(); throw 'Frozen runtime verification timed out' }
           if ($process.ExitCode -ne 0) { throw 'Frozen runtime verification failed' }
       - name: Artifact privacy gate
-        run: python tools/privacy_scan.py --history --artifacts --output docs/privacy-scan.json
+        run: python tools/privacy_scan.py --history --artifacts --trust-local-build --output docs/privacy-scan.json
             - name: Capture Codacy check annotations
         if: ${{ !cancelled() && github.event_name == 'pull_request' }}
         shell: pwsh

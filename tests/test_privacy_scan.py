@@ -72,7 +72,6 @@ def test_untrusted_frozen_bytes_are_never_unmarshalled(monkeypatch):
 
 
 def test_trusted_local_build_can_verify_exact_vendor_code(monkeypatch):
-    import marshal
     from pathlib import Path
 
     import tools.privacy_scan as scanner
@@ -84,10 +83,11 @@ def test_trusted_local_build_can_verify_exact_vendor_code(monkeypatch):
         lambda package, relative: (source_path, "0" * 64, "test-version"),
     )
     expected = compile(source_path.read_bytes(), str(source_path), "exec", dont_inherit=True)
+    monkeypatch.setattr(scanner.marshal, "loads", lambda _data: expected)
     metadata = scanner.vendor_metadata(
         "frozen/numpy.__config__",
         "0" * 64,
-        marshal.dumps(expected),
+        b"trusted local frozen-code fixture",
         trusted_local_build=True,
     )
     assert metadata and metadata["package"] == "numpy"

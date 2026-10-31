@@ -179,7 +179,6 @@ def test_real_ocr_product_probe_is_an_explicit_separate_command(tmp_path, script
     assert result.returncode == 2 and b"--component-test" in result.stderr
     assert not output.exists()
 
-
 def test_frozen_process_probe_requires_opt_in_before_launching_anything(tmp_path):
     root = Path(__file__).resolve().parents[1]
     output = tmp_path / "not-created.json"
@@ -261,6 +260,9 @@ def test_bounded_probe_launches_the_exact_approved_executable(monkeypatch, tmp_p
     approved.write_bytes(b"test executable placeholder")
     child_cwd = tmp_path / "different-working-directory"
     child_cwd.mkdir()
+    # Keep the test on one filesystem: Windows runners may place the checkout
+    # on D: and pytest's temporary directory on C:.
+    monkeypatch.chdir(tmp_path)
     relative_executable = os.path.relpath(approved, Path.cwd())
     captured = {}
 
@@ -326,8 +328,7 @@ def test_manual_probe_timeout_terminates_owned_worker_tree(monkeypatch, tmp_path
     monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1] / "tools"))
     from qualification_policy import run_bounded_probe
 
-    result = run_bounded_probe(
-        [sys.executable, "-c", "import time; time.sleep(20)"], dict(os.environ), 0.1
+    result = run_bounded_probe(        [sys.executable, "-c", "import time; time.sleep(20)"], dict(os.environ), 0.1
     )
     assert result == 124
 

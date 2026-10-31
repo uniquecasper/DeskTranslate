@@ -158,7 +158,7 @@ class Signer:
         subprocess.run([str(self.tool), "verify", "/pa", "/all", "/tw", str(path)], check=True)  # nosec B603  # Validated SignTool path; fixed argv.  # nosemgrep
         # SignTool /tw only warns about missing timestamps. Make it a hard gate,
         # and check the certificate selected for our own executable/installer.
-        subprocess.run(  # nosec B603,B607  # Fixed signature-check script in this repository.  # nosemgrep
+        subprocess.run(  # nosec B603, B607  # Fixed signature-check script in this repository.  # nosemgrep
             [
                 "powershell",
                 "-NoProfile",

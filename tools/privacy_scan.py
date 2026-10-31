@@ -161,9 +161,9 @@ def run(artifacts: bool, history: bool, artifact_root: Path | None = None) -> di
             findings.append({"location": location, "categories": sorted(categories)})
 
     tracked = (
-        subprocess.check_output(
+        subprocess.check_output(  # nosec B603, B607  # Fixed Git argv; scans local repository tree.  # nosemgrep
             ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"], cwd=ROOT
-        )  # nosec B603,B607  # Fixed Git argv; scans the local repository tree.  # nosemgrep
+        )
         .decode()
         .split("\0")
     )
@@ -175,11 +175,11 @@ def run(artifacts: bool, history: bool, artifact_root: Path | None = None) -> di
             counts["tree_files"] += 1
     if history:
         objects = (
-            subprocess.check_output(["git", "rev-list", "--objects", "--all"], cwd=ROOT)  # nosec B603,B607  # Fixed Git argv; scans local refs.  # nosemgrep
+            subprocess.check_output(["git", "rev-list", "--objects", "--all"], cwd=ROOT)  # nosec B603, B607  # Fixed Git argv; scans local refs.  # nosemgrep
             .decode()
             .splitlines()
         )
-        process = subprocess.Popen(  # nosec B603,B607  # Fixed Git argv; pipes are consumed and closed below.  # nosemgrep
+        process = subprocess.Popen(  # nosec B603, B607  # Fixed Git argv; pipes are consumed and closed below.  # nosemgrep
             ["git", "cat-file", "--batch"], cwd=ROOT, stdin=subprocess.PIPE, stdout=subprocess.PIPE
         )
         if process.stdin is None or process.stdout is None:

@@ -107,7 +107,7 @@ sys.argv=[script]
 sys.path.insert(0,str(pathlib.Path(script).parent))
 runpy.run_path(script,run_name='__main__')
 """
-    result = subprocess.run(  # nosec B603  # Test-owned Python snippet; no shell.
+    result = subprocess.run(  # nosec B603  # Test-owned Python snippet; no shell.  # nosemgrep
         [sys.executable, "-c", bootstrap, str(root / "tools" / script)],
         cwd=root,
         capture_output=True,

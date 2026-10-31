@@ -137,7 +137,9 @@ def main():
         handle = ready["handle"]
         info = inspector.info(handle)
         if info is None or info.title != TITLE or info.pid != ready["pid"]:
-            raise RuntimeError("The authored target window identity did not match its readiness record.")
+            raise RuntimeError(
+                "The authored target window identity did not match its readiness record."
+            )
         store = SettingsStore()
         store.save(
             Settings(

@@ -309,7 +309,9 @@ class VocabularyStore:
     def get(self, entry_id: int) -> VocabularyEntry | None:
         entry_id = _entry_id(entry_id)
         with self._session() as connection:
-            row = connection.execute("SELECT * FROM vocabulary_entries WHERE id = ?", (entry_id,)).fetchone()
+            row = connection.execute(
+                "SELECT * FROM vocabulary_entries WHERE id = ?", (entry_id,)
+            ).fetchone()
             return _entry(row) if row is not None else None
 
     def list_entries(

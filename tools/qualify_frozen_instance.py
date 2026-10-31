@@ -17,9 +17,10 @@ from desktranslate.settings import Settings, SettingsStore
 
 
 def qualify(program: Path) -> dict:
-    if program.name != "DeskTranslate.exe" or not (
-        program.parent / "managed-runtime.txt"
-    ).is_file():
+    if (
+        program.name != "DeskTranslate.exe"
+        or not (program.parent / "managed-runtime.txt").is_file()
+    ):
         raise ValueError("Use a verified, matching DeskTranslate managed runtime, not an installer")
     expected_program = (
         Path(__file__).resolve().parents[1] / "dist" / "DeskTranslate" / "DeskTranslate.exe"
@@ -75,7 +76,9 @@ def qualify(program: Path) -> dict:
             ):
                 time.sleep(0.05)
             if not (store.directory / "instance.lock").exists() or primary.poll() is not None:
-                raise RuntimeError("The owned frozen instance did not acquire its lock before timeout.")
+                raise RuntimeError(
+                    "The owned frozen instance did not acquire its lock before timeout."
+                )
             stage = "relaunch"
             duplicate = subprocess.run([str(program), "--demo"], timeout=15, **options)  # nosec B603  # Same verified app and fixed argument.  # nosemgrep
             checks["relaunch_existing_frozen_owner"] = (

@@ -148,7 +148,9 @@ def run(
     import io
 
     if trust_local_build and artifact_root is not None:
-        raise ValueError("--trust-local-build cannot be combined with an externally supplied --artifact-root")
+        raise ValueError(
+            "--trust-local-build cannot be combined with an externally supplied --artifact-root"
+        )
     patterns = signatures()
     findings = []
     upstream_metadata = []
@@ -286,7 +288,9 @@ if __name__ == "__main__":
     parser.add_argument("--artifacts", action="store_true")
     parser.add_argument("--history", action="store_true")
     parser.add_argument(
-        "--artifact-root", type=Path, help="Externally supplied extracted dist directory to inspect (treated as untrusted)"
+        "--artifact-root",
+        type=Path,
+        help="Externally supplied extracted dist directory to inspect (treated as untrusted)",
     )
     parser.add_argument(
         "--trust-local-build",

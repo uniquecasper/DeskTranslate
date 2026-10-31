@@ -105,6 +105,34 @@ def test_pause_resume_actions_and_persistent_state_follow_actual_session(product
     assert pipeline.session.state.value == "watching"
 
 
+@pytest.mark.parametrize(
+    "control_name,invalid_language",
+    [("source_combo", "en"), ("target_combo", "ja")],
+)
+def test_identical_language_pair_is_rejected_without_interrupting_session(
+    product, control_name, invalid_language
+):
+    from desktranslate.pipeline import Pipeline
+
+    pipeline = Pipeline(product.settings, lambda: None, lambda: None, lambda: None)
+    pipeline.session.start()
+    product.pipeline = pipeline
+    revision = product.settings_revision
+    control = getattr(product, control_name)
+
+    control.setCurrentIndex(control.findData(invalid_language))
+
+    assert (product.settings.source, product.settings.target) == ("ja", "en")
+    assert (product.source_combo.currentData(), product.target_combo.currentData()) == (
+        "ja",
+        "en",
+    )
+    assert (product.store.load().source, product.store.load().target) == ("ja", "en")
+    assert product.settings_revision == revision
+    assert product.pipeline is pipeline and not pipeline.cancel.is_set()
+    assert "different source and translation languages" in product.status_label.text()
+
+
 def test_failed_language_swap_keeps_both_languages_and_current_session(product, monkeypatch):
     from desktranslate.pipeline import Pipeline
 

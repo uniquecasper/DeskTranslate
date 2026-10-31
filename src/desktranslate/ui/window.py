@@ -919,10 +919,21 @@ class MainWindow(QMainWindow):
             callback(result, error)
 
     def language_changed(self) -> None:
-        if self.source_combo.currentData() and self.target_combo.currentData():
+        source, target = self.source_combo.currentData(), self.target_combo.currentData()
+        if source and target:
+            if source == target:
+                for control, value in (
+                    (self.source_combo, self.settings.source),
+                    (self.target_combo, self.settings.target),
+                ):
+                    control.blockSignals(True)
+                    control.setCurrentIndex(control.findData(value))
+                    control.blockSignals(False)
+                self.notice("Choose different source and translation languages.")
+                return
             updated = copy.deepcopy(self.settings)
-            updated.source = self.source_combo.currentData()
-            updated.target = self.target_combo.currentData()
+            updated.source = source
+            updated.target = target
             if not self.commit_settings(updated):
                 for control, value in (
                     (self.source_combo, self.settings.source),

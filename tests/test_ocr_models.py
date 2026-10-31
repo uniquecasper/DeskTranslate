@@ -193,7 +193,6 @@ def test_model_download_is_bounded_identity_and_atomic(tmp_path, monkeypatch, co
     assert not list(tmp_path.glob("*.part"))
 
 
-
 @pytest.mark.parametrize("failure", ["http", "connect"])
 def test_transient_model_download_failure_is_retried(tmp_path, monkeypatch, failure):
     manager = ModelManager(tmp_path)
@@ -228,9 +227,7 @@ def test_transient_model_download_failure_is_retried(tmp_path, monkeypatch, fail
     assert not list(tmp_path.glob("*.part"))
 
 
-def test_incomplete_content_length_retries_and_preserves_existing_model(
-    tmp_path, monkeypatch
-):
+def test_incomplete_content_length_retries_and_preserves_existing_model(tmp_path, monkeypatch):
     manager = ModelManager(tmp_path)
     manager.catalog = {
         key: {
@@ -249,9 +246,7 @@ def test_incomplete_content_length_retries_and_preserves_existing_model(
     def response(_request):
         nonlocal requests
         requests += 1
-        return httpx.Response(
-            200, content=b"correct", headers={"Content-Length": "99"}
-        )
+        return httpx.Response(200, content=b"correct", headers={"Content-Length": "99"})
 
     def client(**kwargs):
         return original(transport=httpx.MockTransport(response), **kwargs)
@@ -279,9 +274,7 @@ def test_cancelled_model_download_removes_partial_file(tmp_path, monkeypatch):
 
     def client(**kwargs):
         return original(
-            transport=httpx.MockTransport(
-                lambda request: httpx.Response(200, content=b"correct")
-            ),
+            transport=httpx.MockTransport(lambda request: httpx.Response(200, content=b"correct")),
             **kwargs,
         )
 

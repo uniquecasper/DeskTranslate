@@ -290,3 +290,139 @@ def test_cancelled_model_download_removes_partial_file(tmp_path, monkeypatch):
 
     assert not list(tmp_path.glob("*.part"))
     assert not manager.installed("ja")
+
+
+
+@pytest.mark.parametrize("size", [-1, 100_000_001, "7", True])
+def test_invalid_manifest_model_size_is_rejected_before_network(
+    tmp_path, monkeypatch, size
+):
+    manager = ModelManager(tmp_path)
+    manager.catalog = {
+        key: {
+            "filename": key + ".onnx",
+            "url": "https://models.example/" + key,
+            "sha256": hashlib.sha256(b"correct").hexdigest(),
+            "bytes": size,
+        }
+        for key in manager.required("ja")
+    }
+    original = httpx.AsyncClient
+    requests = 0
+
+    def response(_request):
+        nonlocal requests
+        requests += 1
+        return httpx.Response(200, content=b"correct")
+
+    def client(**kwargs):
+        return original(transport=httpx.MockTransport(response), **kwargs)
+
+    monkeypatch.setattr(httpx, "AsyncClient", client)
+    with pytest.raises(OCRInitializationError, match="manifest size"):
+        manager.install("ja", Event(), lambda *args: None)
+
+    assert requests == 0
+    assert not list(tmp_path.glob("*.part"))
+
+
+def test_content_length_must_match_pinned_manifest_size(tmp_path, monkeypatch):
+    manager = ModelManager(tmp_path)
+    manager.catalog = {
+        key: {
+            "filename": key + ".onnx",
+            "url": "https://models.example/" + key,
+            "sha256": hashlib.sha256(b"correct").hexdigest(),
+            "bytes": len(b"correct"),
+        }
+        for key in manager.required("ja")
+    }
+    original = httpx.AsyncClient
+    requests = 0
+
+    def response(_request):
+        nonlocal requests
+        requests += 1
+        return httpx.Response(200, content=b"correct", headers={"Content-Length": "99"})
+
+    def client(**kwargs):
+        return original(transport=httpx.MockTransport(response), **kwargs)
+
+    monkeypatch.setattr(httpx, "AsyncClient", client)
+    with pytest.raises(OCRInitializationError, match="incomplete"):
+        manager.install("ja", Event(), lambda *args: None)
+
+    assert requests == 3
+    assert not list(tmp_path.glob("*.part"))
+    assert not manager.installed("ja")
+
+
+def test_digest_mismatch_is_retried_and_never_installed(tmp_path, monkeypatch):
+    manager = ModelManager(tmp_path)
+    manager.catalog = {
+        key: {
+            "filename": key + ".onnx",
+            "url": "https://models.example/" + key,
+            "sha256": hashlib.sha256(b"correct").hexdigest(),
+        }
+        for key in manager.required("ja")
+    }
+    original = httpx.AsyncClient
+    requests = 0
+
+    def response(_request):
+        nonlocal requests
+        requests += 1
+        return httpx.Response(200, content=b"corrupt")
+
+    def client(**kwargs):
+        return original(transport=httpx.MockTransport(response), **kwargs)
+
+    monkeypatch.setattr(httpx, "AsyncClient", client)
+    with pytest.raises(OCRInitializationError, match="verification"):
+        manager.install("ja", Event(), lambda *args: None)
+
+    assert requests == 3
+    assert not list(tmp_path.glob("*.part"))
+    assert not manager.installed("ja")
+
+
+@pytest.mark.parametrize(
+    ("location", "expected_requests", "message"),
+    [
+        ("http://models.example/downgrade", 1, "HTTPS"),
+        ("/next", 6, "redirects"),
+        (None, 1, "redirects"),
+    ],
+)
+def test_model_download_redirects_are_bounded_and_https_only(
+    tmp_path, monkeypatch, location, expected_requests, message
+):
+    manager = ModelManager(tmp_path)
+    manager.catalog = {
+        key: {
+            "filename": key + ".onnx",
+            "url": "https://models.example/" + key,
+            "sha256": hashlib.sha256(b"correct").hexdigest(),
+        }
+        for key in manager.required("ja")
+    }
+    original = httpx.AsyncClient
+    requests = 0
+
+    def response(_request):
+        nonlocal requests
+        requests += 1
+        headers = {"Location": location} if location is not None else {}
+        return httpx.Response(302, headers=headers)
+
+    def client(**kwargs):
+        return original(transport=httpx.MockTransport(response), **kwargs)
+
+    monkeypatch.setattr(httpx, "AsyncClient", client)
+    with pytest.raises(OCRInitializationError, match=message):
+        manager.install("ja", Event(), lambda *args: None)
+
+    assert requests == expected_requests
+    assert not list(tmp_path.glob("*.part"))
+    assert not manager.installed("ja")

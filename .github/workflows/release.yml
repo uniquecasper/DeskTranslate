@@ -104,7 +104,7 @@ jobs:
           $probe = @{OcrFixture="$PWD/tests/fixtures/ja-game.png"; ModelDataDirectory="$env:DESKTRANSLATE_DATA_DIR/models"; AllowInstallChanges=$true}
           if ($env:RELEASE_SIGNED -eq 'true') { $probe.Signed = $true }
           ./tools/qualify_installer.ps1 @probe
-          python tools/privacy_scan.py --artifacts --history --output docs/privacy-scan.json
+          python tools/privacy_scan.py --artifacts --history --trust-local-build --output docs/privacy-scan.json
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - name: Attest hosted build artifacts
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6

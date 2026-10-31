@@ -12,6 +12,9 @@ on:
         default: false
 permissions:
   contents: read
+concurrency:
+  group: desktranslate-2-0-1-qualification-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   candidate:
     permissions:
@@ -42,7 +45,7 @@ jobs:
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python tools/validate.py --predeploy --junitxml .audit/pytest.xml
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          python -c "from pathlib import Path; from tools.release_support import version_gate; version_gate(Path.cwd())"
+          python -c "from pathlib import Path; from desktranslate import __version__; from tools.release_support import version_gate,require_release_condition; version_gate(Path.cwd()); require_release_condition(__version__ == '2.0.1', 'This workflow is reserved for the 2.0.1 candidate')"
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - name: Import publisher certificate
         if: inputs.signed
@@ -143,7 +146,7 @@ jobs:
             dist/*.exe
             dist/*.zip
       - name: Remove publisher certificate
-        if: ${{ always() && inputs.signed }}
+        if: ${{ always() }}
         shell: pwsh
         run: |
           if ($env:DESKTRANSLATE_SIGNING_THUMBPRINT -match '^[A-Fa-f0-9]{40}$') {

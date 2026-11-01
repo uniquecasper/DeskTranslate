@@ -581,6 +581,7 @@ def test_double_clicking_a_recognized_word_emits_the_selected_word(window):
 
 
 def test_dictionary_dialog_shows_meaning_definition_example_and_attribution(window, monkeypatch):
+    from PySide6.QtCore import Qt
     from PySide6.QtWidgets import QMessageBox
 
     from desktranslate.dictionary import DictionarySense, EnglishDictionaryEntry
@@ -589,7 +590,9 @@ def test_dictionary_dialog_shows_meaning_definition_example_and_attribution(wind
     monkeypatch.setattr(
         QMessageBox,
         "exec",
-        lambda dialog: captured.append((dialog.text(), dialog.informativeText())),
+        lambda dialog: captured.append(
+            (dialog.text(), dialog.informativeText(), dialog.textFormat())
+        ),
     )
 
     window.show_word_lookup_result(
@@ -607,7 +610,8 @@ def test_dictionary_dialog_shows_meaning_definition_example_and_attribution(wind
     )
 
     assert len(captured) == 1
-    body, attribution = captured[0]
+    body, attribution, text_format = captured[0]
+    assert text_format == Qt.TextFormat.PlainText
     assert "Meaning (Turkish):" in body
     assert "koşmak" in body
     assert "English explanation and example" in body

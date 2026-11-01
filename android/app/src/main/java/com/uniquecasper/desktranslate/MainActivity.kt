@@ -168,8 +168,8 @@ class MainActivity : ComponentActivity() {
     private fun showTranslationOverlay(text: String) {
         if (!Settings.canDrawOverlays(this)) {
             pendingOverlayText = text
-            statusText.value = "Translation is ready. Grant Display over other apps to show it automatically."
-            if (!overlayPermissionPrompted) requestOverlayPermissionForSession()
+            statusText.value = "Translation is ready. Enable Display over other apps to show it automatically."
+            openOverlayPermissionSettings()
             return
         }
         try {

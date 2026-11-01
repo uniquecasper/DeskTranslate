@@ -144,6 +144,7 @@ def test_code_is_masked_from_provider_and_restored_in_delivered_result():
     events = []
     pipeline.start()
     try:
+
         def delivered():
             events.extend(pipeline.poll())
             return any(event.result is not None for event in events)
@@ -154,8 +155,7 @@ def test_code_is_masked_from_provider_and_restored_in_delivered_result():
         assert "const hidden = 42;" not in request.text
         assert "DTXQZ_LOCK_" in request.text
         assert all(
-            "previous_secret" not in pair.source + pair.translation
-            for pair in request.context
+            "previous_secret" not in pair.source + pair.translation for pair in request.context
         )
         translated_event = next(event for event in reversed(events) if event.result is not None)
         assert translated_event.result is not None

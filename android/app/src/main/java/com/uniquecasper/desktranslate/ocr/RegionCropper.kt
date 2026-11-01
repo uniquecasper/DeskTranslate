@@ -54,10 +54,17 @@ object RegionCropper {
             1f,
             maxDimensionPx.toFloat() / maxOf(bounds.width(), bounds.height())
         )
-        val crop = try {
+        val captured = try {
             Bitmap.createBitmap(source, bounds.left, bounds.top, bounds.width(), bounds.height())
         } catch (_: IllegalArgumentException) {
             return null
+        }
+        // Android may return the original bitmap when the crop covers the full frame.
+        // The caller always recycles Crop.bitmap, so never transfer ownership of source.
+        val crop = if (captured === source) {
+            source.copy(Bitmap.Config.ARGB_8888, false) ?: return null
+        } else {
+            captured
         }
         val output = if (scale < 1f) {
             val scaled = Bitmap.createScaledBitmap(

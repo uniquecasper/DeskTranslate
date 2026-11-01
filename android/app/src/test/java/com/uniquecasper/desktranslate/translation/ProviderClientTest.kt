@@ -16,6 +16,14 @@ class ProviderClientTest {
     }
 
     @Test
+    fun addsHttpsWhenRemoteEndpointHasNoScheme() {
+        assertEquals(
+            "https://generativelanguage.googleapis.com/v1beta",
+            ProviderClient.validateEndpoint("generativelanguage.googleapis.com/v1beta")
+        )
+    }
+
+    @Test
     fun allowsHttpOnlyForLoopback() {
         assertEquals("http://localhost:11434", ProviderClient.validateEndpoint("http://localhost:11434/"))
         assertThrows(IllegalArgumentException::class.java) {

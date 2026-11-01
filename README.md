@@ -28,11 +28,11 @@ Translate the dialogue in a game, subtitles in a video, a menu, or text in an im
 
 ![DeskTranslate's profile manager with authored example setups for a visual novel, subtitles and menus](docs/screenshots/profiles-dark.png)
 
-Save a setup for each game, show or task, then load it when you're ready. The examples above are synthetic; keys stay in your local OS vault. [Read the privacy policy](docs/privacy.md) or [report a problem](https://github.com/DeskTranslate/DeskTranslate/issues/new/choose).
+Save a setup for each game, show or task, then load it when you're ready. The examples above are synthetic; keys stay in your local OS vault. [Read the privacy policy](docs/privacy.md) or [report a problem](https://github.com/uniquecasper/DeskTranslate/issues/new/choose).
 
 ## Install
 
-Download **Windows x64**, primarily Windows 11. The installer's configured minimum is Windows 10 build19041; that setting does not establish current Microsoft support or successful runtime/hardware qualification. Download `DeskTranslate-2.1.0-Setup-x64.exe` from the [official release page](https://github.com/DeskTranslate/DeskTranslate/releases/tag/v2.1.0). Installation is per user and needs no administrator account. Normal users need no Python, pip, Visual Studio, Tesseract, or manual DLL installation. See the [acceptance matrix](docs/validation.md).
+Download **Windows x64**, primarily Windows 11. The installer's configured minimum is Windows 10 build19041; that setting does not establish current Microsoft support or successful runtime/hardware qualification. Download `DeskTranslate-2.1.0-Setup-x64.exe` from the [official release page](https://github.com/uniquecasper/DeskTranslate/releases/tag/v2.1.0). Installation is per user and needs no administrator account. Normal users need no Python, pip, Visual Studio, Tesseract, or manual DLL installation. See the [acceptance matrix](docs/validation.md).
 
 For portable use, extract the **entire** ZIP into a writable folder and launch `DeskTranslate.exe`. Keep `_internal` and `portable-mode` beside it. Portable settings, logs, and downloaded models live in `DeskTranslateData` beside the executable; installed builds use `%LOCALAPPDATA%\DeskTranslate`. Credentials remain in your Windows account's vault. Move the entire folder to retain portable data.
 

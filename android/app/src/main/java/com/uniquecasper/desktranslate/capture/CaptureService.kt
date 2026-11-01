@@ -8,6 +8,9 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.PixelFormat
+import android.graphics.Rect
+import org.json.JSONArray
+import org.json.JSONObject
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
 import android.media.Image
@@ -22,6 +25,8 @@ import android.os.SystemClock
 import android.util.DisplayMetrics
 import android.view.WindowManager
 import com.uniquecasper.desktranslate.ocr.OcrEngine
+import com.uniquecasper.desktranslate.ocr.OcrTextBlock
+import com.uniquecasper.desktranslate.ocr.RegionCropper
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -166,12 +171,31 @@ class CaptureService : Service() {
 
         worker.execute {
             try {
-                val recognized = ocr?.recognize(bitmap, script).orEmpty()
+                val rawBlocks = ocr?.recognize(bitmap, script).orEmpty()
+                val blocks = refineLowConfidenceBlocks(bitmap, rawBlocks).take(MAX_BLOCKS)
+                val recognized = blocks.joinToString("\n") { it.text }.take(MAX_TEXT_CHARS)
                 if (recognized.isNotBlank()) {
+                    val blockPayload = JSONArray()
+                    blocks.forEach { block ->
+                        blockPayload.put(
+                            JSONObject()
+                                .put("id", block.id)
+                                .put("text", block.text)
+                                .put("left", block.bounds.left)
+                                .put("top", block.bounds.top)
+                                .put("right", block.bounds.right)
+                                .put("bottom", block.bounds.bottom)
+                                .put("confidence", block.confidence.toDouble())
+                                .put("backgroundColor", block.backgroundColor)
+                                .put("textColor", block.textColor)
+                                .put("lineHeightPx", block.lineHeightPx)
+                        )
+                    }
                     sendBroadcast(
                         Intent(ACTION_OCR_RESULT)
                             .setPackage(packageName)
-                            .putExtra(EXTRA_TEXT, recognized.take(MAX_TEXT_CHARS))
+                            .putExtra(EXTRA_TEXT, recognized)
+                            .putExtra(EXTRA_BLOCKS, blockPayload.toString())
                     )
                 }
             } catch (error: Exception) {
@@ -179,6 +203,38 @@ class CaptureService : Service() {
             } finally {
                 bitmap.recycle()
                 processing.set(false)
+            }
+        }
+    }
+
+    /**
+     * Retry only a few weak lines using a context crop. This borrows the region-focused
+     * retry strategy described by AidanPark's screen-translator TargetCrop design.
+     */
+    private fun refineLowConfidenceBlocks(
+        frame: Bitmap,
+        blocks: List<OcrTextBlock>
+    ): List<OcrTextBlock> {
+        var retriesLeft = MAX_LOW_CONFIDENCE_RETRIES
+        return blocks.map { block ->
+            if (block.confidence >= MIN_RETRY_CONFIDENCE || retriesLeft <= 0) {
+                return@map block
+            }
+            val crop = RegionCropper.around(frame, Rect(block.bounds)) ?: return@map block
+            retriesLeft--
+            try {
+                val retry = ocr?.recognize(crop.bitmap, script)
+                    ?.maxByOrNull { it.confidence }
+                    ?: return@map block
+                if (retry.confidence > block.confidence + RETRY_CONFIDENCE_GAIN &&
+                    retry.text.length >= block.text.length
+                ) {
+                    block.copy(text = retry.text, confidence = retry.confidence)
+                } else {
+                    block
+                }
+            } finally {
+                crop.close()
             }
         }
     }
@@ -249,9 +305,14 @@ class CaptureService : Service() {
         const val EXTRA_RESULT_DATA = "result_data"
         const val EXTRA_SCRIPT = "script"
         const val EXTRA_TEXT = "text"
+        const val EXTRA_BLOCKS = "blocks_json"
         private const val CHANNEL_ID = "desktranslate_capture"
         private const val NOTIFICATION_ID = 4102
         private const val FRAME_INTERVAL_MS = 800L
         private const val MAX_TEXT_CHARS = 12000
+        private const val MAX_BLOCKS = 60
+        private const val MAX_LOW_CONFIDENCE_RETRIES = 3
+        private const val MIN_RETRY_CONFIDENCE = 0.58f
+        private const val RETRY_CONFIDENCE_GAIN = 0.08f
     }
 }

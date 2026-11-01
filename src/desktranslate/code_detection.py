@@ -16,6 +16,7 @@ _LINE_PATTERNS = tuple(
     re.compile(pattern, re.IGNORECASE)
     for pattern in (
         r"^\\s*(?:def|class|function|func)\\s+[A-Za-z_$][\\w$]*",
+        r"^\\s*(?:(?:public|private|protected|internal|static|async|sealed|abstract)\\s+)+(?:class|interface|enum|struct|void|int|string|bool|Task(?:<[^>]+>)?)\\b",
         r"^\\s*(?:const|let|var)\\s+[A-Za-z_$][\\w$]*\\s*(?::[^=]+)?=",
         r"^\\s*(?:import|from)\\s+[\\w.*]+",
         r"^\\s*(?:using|namespace|package)\\s+[\\w.]+;?\\s*$",

@@ -51,5 +51,7 @@ dependencies {
     implementation("com.google.mlkit:text-recognition-korean:16.0.1")
 
     testImplementation("junit:junit:4.13.2")
+    // JVM tests need a real JSON implementation; android.jar exposes stub org.json methods.
+    testImplementation("org.json:json:20260814")
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

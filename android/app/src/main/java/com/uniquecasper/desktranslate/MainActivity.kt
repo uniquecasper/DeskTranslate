@@ -8,8 +8,8 @@ import android.content.IntentFilter
 import android.net.Uri
 import android.provider.Settings
 import android.media.projection.MediaProjectionManager
-import android.os.Build
 import android.os.Bundle
+import android.os.SystemClock
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -47,6 +47,7 @@ import com.uniquecasper.desktranslate.security.CredentialStore
 import com.uniquecasper.desktranslate.translation.ProviderClient
 import com.uniquecasper.desktranslate.translation.ProviderConfig
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -55,6 +56,8 @@ class MainActivity : ComponentActivity() {
     private val statusText = mutableStateOf("Ready")
     private var requestedScript = "Latin"
     private lateinit var translationOverlay: TranslationOverlay
+    private var pendingOverlayText: String? = null
+    private var overlayPermissionPrompted = false
 
     private val projectionLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -68,7 +71,8 @@ class MainActivity : ComponentActivity() {
                 putExtra(CaptureService.EXTRA_SCRIPT, requestedScript)
             }
             startForegroundService(service)
-            statusText.value = "Capture permission granted. Starting…"
+            statusText.value = "Capture started. Switch to the app or game you want to translate."
+            requestOverlayPermissionForSession()
         } else {
             statusText.value = "Screen capture permission was declined."
         }
@@ -124,21 +128,38 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun requestOverlayPermissionForSession() {
+        if (Settings.canDrawOverlays(this) || overlayPermissionPrompted) return
+        overlayPermissionPrompted = true
+        statusText.value = "Grant Display over other apps so translations can appear automatically."
+        val settingsIntent = Intent(
+            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+            Uri.parse("package:$packageName")
+        )
+        startActivity(settingsIntent)
+    }
+
     private fun showTranslationOverlay(text: String) {
         if (!Settings.canDrawOverlays(this)) {
-            statusText.value = "Allow Display over other apps, then tap Show floating overlay again."
-            val settingsIntent = Intent(
-                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                Uri.parse("package:$packageName")
-            )
-            startActivity(settingsIntent)
+            pendingOverlayText = text
+            statusText.value = "Translation is ready. Grant Display over other apps to show it automatically."
+            if (!overlayPermissionPrompted) requestOverlayPermissionForSession()
             return
         }
         try {
             translationOverlay.show(text)
-            statusText.value = "Translation is visible in a floating window."
+            pendingOverlayText = null
+            statusText.value = "Floating translation updated automatically."
         } catch (error: Exception) {
             statusText.value = "Could not show overlay: " + (error.message ?: error.javaClass.simpleName)
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        val pending = pendingOverlayText
+        if (pending != null && Settings.canDrawOverlays(this)) {
+            showTranslationOverlay(pending)
         }
     }
 
@@ -174,12 +195,97 @@ private fun DeskTranslateScreen(
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf(status) }
     var entries by remember { mutableStateOf(vocabulary.recent()) }
+    var credentialRevision by remember { mutableStateOf(0) }
+    var lastAutoAttemptSignature by remember { mutableStateOf("") }
+    var lastAutoTranslationAt by remember { mutableStateOf(0L) }
 
-    LaunchedEffect(recognizedText) {
-        if (recognizedText.isNotBlank()) sourceText = recognizedText
+    val providerId = provider.trim().lowercase()
+    val storedKey = remember(providerId, credentialRevision) {
+        if (providerId.matches(Regex("[a-z0-9_-]{1,40}"))) {
+            credentials.load(providerId).orEmpty()
+        } else {
+            ""
+        }
     }
+    val effectiveApiKey = apiKey.trim().ifBlank { storedKey }
+
     LaunchedEffect(status) {
         message = status
+    }
+
+    suspend fun translateText(input: String, automatic: Boolean) {
+        val text = input.trim().take(12000)
+        if (text.isBlank()) {
+            message = "There is no text to translate."
+            return
+        }
+        if (busy) return
+
+        val config = ProviderConfig(
+            provider = providerId,
+            endpoint = endpoint.trim(),
+            model = model.trim(),
+            apiKey = effectiveApiKey
+        )
+        busy = true
+        message = if (automatic) {
+            "New screen text detected. Translating…"
+        } else {
+            "Translating with the selected provider…"
+        }
+        try {
+            val result = withContext(Dispatchers.IO) {
+                ProviderClient.translate(config, text, sourceLanguage, targetLanguage)
+            }
+            translation = result
+            message = "Translation completed. Updating floating panel…"
+            onShowOverlay(result)
+        } catch (error: Exception) {
+            message = "Translation failed: " + (error.message ?: error.javaClass.simpleName)
+        } finally {
+            busy = false
+        }
+    }
+
+    LaunchedEffect(
+        recognizedText,
+        providerId,
+        endpoint,
+        model,
+        effectiveApiKey,
+        sourceLanguage,
+        targetLanguage
+    ) {
+        val candidate = recognizedText.trim().take(12000)
+        if (candidate.isBlank()) return@LaunchedEffect
+
+        sourceText = candidate
+        val signature = listOf(
+            providerId,
+            endpoint.trim(),
+            model.trim(),
+            effectiveApiKey,
+            sourceLanguage,
+            targetLanguage,
+            candidate
+        ).joinToString("\u0000")
+        if (signature == lastAutoAttemptSignature) return@LaunchedEffect
+
+        // Wait briefly for OCR text to settle. A cooldown prevents animated screens
+        // and frequently changing status bars from generating a request every frame.
+        delay(800)
+        if (recognizedText.trim().take(12000) != candidate) return@LaunchedEffect
+        while (busy) delay(150)
+
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastAutoTranslationAt < AUTO_TRANSLATION_COOLDOWN_MS) {
+            lastAutoAttemptSignature = signature
+            return@LaunchedEffect
+        }
+
+        lastAutoAttemptSignature = signature
+        lastAutoTranslationAt = now
+        translateText(candidate, automatic = true)
     }
 
     Column(
@@ -187,7 +293,7 @@ private fun DeskTranslateScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Text("DeskTranslate", style = MaterialTheme.typography.headlineMedium)
-        Text("Android companion · local OCR · selected translation provider")
+        Text("Android companion · on-device OCR · automatic screen translation")
 
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -204,7 +310,11 @@ private fun DeskTranslateScreen(
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true
                 )
-                Text("Capture uses Android system consent and a visible foreground notification.")
+                Text(
+                    "After capture starts, switch to the app or game you want to translate. " +
+                        "OCR reads the whole screen, including text inside DeskTranslate."
+                )
+                Text("New stable OCR text is translated automatically. The floating panel updates after each successful translation.")
             }
         }
 
@@ -243,44 +353,12 @@ private fun DeskTranslateScreen(
                 )
                 Button(
                     enabled = !busy && sourceText.isNotBlank(),
-                    onClick = {
-                        busy = true
-                        message = "Translating with the selected provider…"
-                        val providerId = provider.trim().lowercase()
-                        val config = ProviderConfig(
-                            provider = providerId,
-                            endpoint = endpoint.trim(),
-                            model = model.trim(),
-                            apiKey = apiKey.ifBlank { credentials.load(providerId).orEmpty() }
-                        )
-                        val text = sourceText
-                        val source = sourceLanguage
-                        val target = targetLanguage
-                        scope.launch {
-                            try {
-                                translation = withContext(Dispatchers.IO) {
-                                    ProviderClient.translate(config, text, source, target)
-                                }
-                                message = "Translation completed."
-                            } catch (error: Exception) {
-                                message = "Translation failed: " + (error.message ?: error.javaClass.simpleName)
-                            } finally {
-                                busy = false
-                            }
-                        }
-                    }
-                ) { Text(if (busy) "Working…" else "Translate") }
-                Button(
-                    enabled = translation.isNotBlank(),
-                    onClick = { onShowOverlay(translation) },
-                    modifier = Modifier.fillMaxWidth()
-                ) { Text("Show floating overlay") }
-                if (translation.isBlank()) {
-                    Text(
-                        "Translate text first; the floating overlay button becomes active when a result exists.",
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                }
+                    onClick = { scope.launch { translateText(sourceText, automatic = false) } }
+                ) { Text(if (busy) "Working…" else "Translate now") }
+                Text(
+                    "Manual translation is available for edited text. Screen OCR is translated automatically.",
+                    style = MaterialTheme.typography.bodySmall
+                )
             }
         }
 
@@ -311,35 +389,56 @@ private fun DeskTranslateScreen(
                 OutlinedTextField(
                     value = apiKey,
                     onValueChange = { apiKey = it.take(4096) },
-                    label = { Text("API key (optional for local Ollama)") },
+                    label = { Text("API key") },
                     visualTransformation = PasswordVisualTransformation(),
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true
                 )
+                Text(
+                    when (providerId) {
+                        "openai" -> "OpenAI requires a valid API key. Enter it here, then press Save key."
+                        "anthropic" -> "Anthropic requires an API key."
+                        "gemini" -> "Gemini requires an API key."
+                        "ollama" -> "API key is optional for a local Ollama server."
+                        else -> "Choose openai, ollama, anthropic or gemini."
+                    },
+                    style = MaterialTheme.typography.bodySmall
+                )
+                if (storedKey.isNotBlank()) {
+                    Text("An encrypted key is saved on this device for $providerId.")
+                }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(onClick = {
                         if (apiKey.isBlank()) {
-                            message = "Enter a key before saving. Use Delete key to remove a stored key."
+                            message = "Enter an API key before saving."
+                        } else if (!providerId.matches(Regex("[a-z0-9_-]{1,40}"))) {
+                            message = "Provider ID is invalid."
                         } else {
-                            credentials.save(provider.trim().lowercase(), apiKey)
+                            credentials.save(providerId, apiKey.trim())
                             apiKey = ""
-                            message = "Credential encrypted and saved for this provider."
+                            credentialRevision++
+                            message = "API key encrypted and saved on this device."
                         }
                     }) { Text("Save key") }
                     TextButton(onClick = {
-                        credentials.delete(provider.trim().lowercase())
-                        apiKey = ""
-                        message = "Saved credential deleted."
+                        if (providerId.matches(Regex("[a-z0-9_-]{1,40}"))) {
+                            credentials.delete(providerId)
+                            apiKey = ""
+                            credentialRevision++
+                            message = "Saved API key deleted."
+                        } else {
+                            message = "Provider ID is invalid."
+                        }
                     }) { Text("Delete key") }
                 }
-                Text("Supported adapters in this build: OpenAI, Ollama, Anthropic and Gemini.")
+                Text("Supported adapters: OpenAI, Ollama, Anthropic and Gemini.")
             }
         }
 
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Vocabulary learning", style = MaterialTheme.typography.titleMedium)
-                Text("Save only after reviewing the source and translation.")
+                Text("Optional: save a reviewed source-text and translation pair locally.")
                 Button(
                     enabled = sourceText.isNotBlank() && translation.isNotBlank(),
                     onClick = {
@@ -352,6 +451,10 @@ private fun DeskTranslateScreen(
                         }
                     }
                 ) { Text("Save approved vocabulary") }
+                Text(
+                    "This section currently stores whole text/translation pairs on this device. " +
+                        "Tap-a-word definitions and learned-word filtering are not implemented yet."
+                )
                 entries.take(30).forEach { entry ->
                     VocabularyRow(entry = entry, onDelete = {
                         vocabulary.delete(entry.id)
@@ -361,7 +464,8 @@ private fun DeskTranslateScreen(
             }
         }
         Text(
-            "Privacy: screenshots and OCR frames are processed in memory. Only recognized text is sent to the provider you select.",
+            "Privacy: screenshots and OCR frames are processed in memory. Only recognized text is sent to the provider you select. " +
+                "Provider keys are encrypted with Android Keystore.",
             style = MaterialTheme.typography.bodySmall
         )
     }
@@ -381,3 +485,5 @@ private fun VocabularyRow(entry: VocabularyEntry, onDelete: () -> Unit) {
         TextButton(onClick = onDelete) { Text("Delete") }
     }
 }
+
+private const val AUTO_TRANSLATION_COOLDOWN_MS = 8_000L

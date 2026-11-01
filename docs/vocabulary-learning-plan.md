@@ -1,6 +1,6 @@
 # Vocabulary Learning — Implementation and Verification
 
-Status: implemented on `main`. The local vocabulary store, read-only contextual lookup and Learning page are integrated. The UI supports explicit selection/review, saving, language-pair filtering, bounded search/paging and confirmed deletion.
+Status: implemented on `main`, with spaced-repetition review added on a follow-up branch. The local vocabulary store, read-only contextual lookup and Learning page support explicit saving, language-pair filtering, bounded search/paging, confirmed deletion and a local review queue.
 
 ## User workflow
 
@@ -28,11 +28,11 @@ When the source language is configured as automatic detection, the save dialog r
 | Component | Responsibility |
 |---|---|
 | `src/desktranslate/vocabulary.py` | Bounded SQLite persistence and validation |
-| `src/desktranslate/vocabulary_lookup.py` | Read-only matching against current and recent source text |
+| `src/desktranslate/vocabulary_lookup.py` | Read-only matching against current and recent source text |\n| `src/desktranslate/vocabulary_review.py` | Local review queue, due dates and interval scheduling |
 | `src/desktranslate/ui/learning.py` | Learning page, explicit save dialog, filters, search, paging and delete |
 | `src/desktranslate/ui/window.py` | Connects the Learning page to the main window and selected translation |
 | `tests/test_vocabulary.py` | Storage, validation, Unicode and database behavior |
-| `tests/test_vocabulary_lookup.py` | Language isolation, ranking, bounds and context matching |
+| `tests/test_vocabulary_lookup.py` | Language isolation, ranking, bounds and context matching |\n| `tests/test_vocabulary_review.py` | Review scheduling, due queue, safe table creation and persistence |
 | `tests/test_learning.py` | UI workflow and selection behavior |
 
 ## Verification matrix
@@ -49,7 +49,7 @@ When the source language is configured as automatic detection, the save dialog r
 | Database migration | Fresh, current, newer, malformed schemas | Safe initialization or explicit error; no silent reset |
 | Concurrency | Overlapping writes near the collection limit | Unique constraints hold; cap is never exceeded; errors are handled |
 | Privacy | Inspect the database and logs after save | Only approved vocabulary fields exist; no secrets, frames or transcripts |
-| Integration | Save from result, list/review, filter/search and delete via UI | Complete journey works without blocking the Qt event loop |
+| Spaced repetition | Again, Hard, Good and Easy ratings | Due dates progress as specified; lapse count and ease factor update predictably |\n| Legacy data | Open a version-1 vocabulary DB with existing saved entries | New review table is added without changing old vocabulary rows or schema version |\n| Integration | Save from result, list/review, filter/search and delete via UI | Complete journey works without blocking the Qt event loop |
 | Packaging | Installed and portable app data paths | Database stored under the expected user/portable data directory |
 
 ## Quality gates

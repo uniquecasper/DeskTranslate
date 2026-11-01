@@ -198,6 +198,10 @@ class TranslationOverlay(context: Context) {
             gravity = Gravity.TOP or Gravity.START
             x = 0
             y = 0
+            // Android 12+ blocks touches through obscuring overlays above the
+            // maximum obscuring opacity. Keep the full-screen text layer below
+            // that threshold while the dedicated DT control remains interactive.
+            alpha = TOUCH_THROUGH_WINDOW_ALPHA
         }
 
         windowManager.addView(root, params)
@@ -373,5 +377,6 @@ class TranslationOverlay(context: Context) {
         private const val MIN_TEXT_SP = 10f
         private const val MAX_TEXT_SP = 18f
         private const val OVERLAY_ALPHA = 226
+        private const val TOUCH_THROUGH_WINDOW_ALPHA = 0.75f
     }
 }

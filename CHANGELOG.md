@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.1.0 — 2026-11-01
+
+DeskTranslate 2.1 adds selected-word dictionary details, stronger source-code preservation and local spaced-repetition review to the Windows screen-translation workflow.
+
+- Double-click a recognized source word to open an explicit dictionary lookup. Reuse an exact saved vocabulary match first; optional Free Dictionary API enrichment supplies English parts of speech, definitions and examples with source/license metadata.
+- Keep dictionary lookup data-minimal: only the selected word or phrase is sent to the configured translation provider when a saved target-language meaning is unavailable. Screenshots, full OCR transcripts and surrounding dialogue are not sent for word lookup.
+- Protect fenced code, inline code and high-confidence code-shaped lines from translation. Restore protected fragments byte-for-byte and reject provider responses that remove, duplicate or reorder protection markers.
+- Add local spaced-repetition review to Learning with Again, Hard, Good and Easy ratings, due-word counts, bounded scheduling, legacy database compatibility and atomic deletion of review state.
+- Keep vocabulary and review scheduling local; no screenshots, OCR transcripts, API keys or provider credentials are stored in the review database or sent as review metadata.
+- Publish the Windows installer and portable package with SHA-256 checksums, SBOMs, source/provenance metadata, Sigstore signatures and GitHub build attestations. Authenticode publisher signing is not configured; Windows may show an unknown-publisher or SmartScreen warning.
+
 ## 2.0.0 — 2026-10-17
 
 DeskTranslate 2 replaces the Tesseract-only, Python-dependent desktop workflow with a packaged Windows application, local managed OCR and a Qt 6 interface. Normal users use the installer or portable ZIP, without installing Python, pip or Tesseract. The Windows release is unsigned; Windows/SmartScreen may warn. Source-matched qualification, hashes and provenance accompany the release; see the validation report for exact scope and remaining limitations.

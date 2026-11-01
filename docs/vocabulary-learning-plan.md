@@ -1,6 +1,6 @@
 # Vocabulary Learning — Implementation and Verification
 
-Status: the base vocabulary store, read-only contextual lookup and Learning page are already on `main`. Spaced-repetition review is staged on `feature/desktranslate-2-1-srs-final`; it is not shipped until the stacked PR passes Windows CI, review and release qualification.
+Status: the vocabulary store, contextual lookup, selected-word dictionary details and spaced-repetition review are integrated on `main` for v2.1.0. Final Windows release qualification and publication remain a separate step.
 
 ## User workflow
 

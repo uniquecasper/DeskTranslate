@@ -51,6 +51,7 @@ import com.uniquecasper.desktranslate.overlay.TranslationOverlay
 import com.uniquecasper.desktranslate.security.CredentialStore
 import com.uniquecasper.desktranslate.translation.ProviderClient
 import com.uniquecasper.desktranslate.translation.ProviderConfig
+import com.uniquecasper.desktranslate.translation.ScreenTextFilter
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -350,7 +351,13 @@ private fun DeskTranslateScreen(
         requestSignature: String
     ) {
         val cleanBlocks = blocks.filter { it.text.isNotBlank() }.take(MAX_OCR_SEGMENTS)
+        val translatableBlocks = cleanBlocks.filter { ScreenTextFilter.isTranslatable(it.text) }
         if (cleanBlocks.isEmpty() || busy) return
+        if (translatableBlocks.isEmpty()) {
+            sourceText = cleanBlocks.joinToString("\n") { it.text }
+            message = "Only numbers, links or non-translatable labels were detected."
+            return
+        }
         // Prevent the busy-state recomposition from scheduling the same failed request
         // repeatedly. A changed text or provider configuration creates a new signature.
         lastAutoAttemptSignature = requestSignature
@@ -367,7 +374,7 @@ private fun DeskTranslateScreen(
             val translated = withContext(Dispatchers.IO) {
                 ProviderClient.translateSegments(
                     config,
-                    cleanBlocks.map { it.text },
+                    translatableBlocks.map { it.text },
                     sourceLanguage,
                     targetLanguage
                 )
@@ -376,7 +383,7 @@ private fun DeskTranslateScreen(
                 message = "A newer screen frame arrived; discarded the outdated translation."
                 return
             }
-            val regions = cleanBlocks.mapIndexed { index, block ->
+            val regions = translatableBlocks.mapIndexed { index, block ->
                 TranslatedRegion(
                     id = block.id,
                     sourceText = block.text,

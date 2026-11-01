@@ -208,3 +208,42 @@ def test_delete_selected_requires_explicit_confirmation(learning_page, monkeypat
     assert store.get(entry.id) is None
     assert page.table.rowCount() == 0
     assert page.match_count == 0
+
+
+def test_learning_page_shows_new_words_in_the_review_queue(learning_page):
+    page, store = learning_page
+    store.add("hello", "merhaba", "en", "tr")
+
+    page.refresh()
+
+    assert page.review_button.isEnabled()
+    assert page.review_status_label.text() == "1 word due for review"
+
+
+def test_review_dialog_reveals_answer_and_records_explicit_rating(
+    learning_page, headless_application
+):
+    from desktranslate.ui.learning import VocabularyReviewDialog
+
+    page, store = learning_page
+    entry = store.add("hello", "merhaba", "en", "tr")
+    queue = page.review_store.due_entries()
+    dialog = VocabularyReviewDialog(queue, page.review_store)
+
+    assert dialog.answer_label.isHidden()
+    assert not dialog.rating_buttons["good"].isEnabled()
+
+    dialog.show_answer()
+
+    assert not dialog.answer_label.isHidden()
+    assert dialog.answer_label.text() == "merhaba"
+    assert dialog.rating_buttons["good"].isEnabled()
+
+    dialog.rating_buttons["good"].click()
+
+    state = page.review_store.state(entry.id)
+    assert state is not None
+    assert state.repetitions == 1
+    assert dialog.progress_label.text() == "Review session complete"
+    dialog.deleteLater()
+    headless_application.processEvents()

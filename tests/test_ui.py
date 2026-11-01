@@ -577,3 +577,41 @@ def test_double_clicking_a_recognized_word_emits_the_selected_word(window):
     QApplication.processEvents()
 
     assert activated == [word]
+
+def test_dictionary_dialog_shows_meaning_definition_example_and_attribution(
+    window, monkeypatch
+):
+    from PySide6.QtWidgets import QMessageBox
+
+    from desktranslate.dictionary import DictionarySense, EnglishDictionaryEntry
+
+    captured = []
+    monkeypatch.setattr(
+        QMessageBox,
+        "exec",
+        lambda dialog: captured.append((dialog.text(), dialog.informativeText())),
+    )
+
+    window.show_word_lookup_result(
+        "run",
+        "koşmak",
+        "en",
+        "tr",
+        dictionary_entry=EnglishDictionaryEntry(
+            "run",
+            (DictionarySense("verb", "To move swiftly on foot.", "She runs every morning."),),
+            ("https://en.wiktionary.org/wiki/run",),
+            "CC BY-SA 3.0",
+            "https://creativecommons.org/licenses/by-sa/3.0/",
+        ),
+    )
+
+    assert len(captured) == 1
+    body, attribution = captured[0]
+    assert "Meaning (Turkish):" in body
+    assert "koşmak" in body
+    assert "English explanation and example" in body
+    assert "To move swiftly on foot." in body
+    assert "She runs every morning." in body
+    assert "dictionaryapi.dev" in attribution
+    assert "CC BY-SA 3.0" in attribution

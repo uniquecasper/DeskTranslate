@@ -5,6 +5,8 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.net.Uri
+import android.provider.Settings
 import android.media.projection.MediaProjectionManager
 import android.os.Build
 import android.os.Bundle
@@ -40,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import com.uniquecasper.desktranslate.capture.CaptureService
 import com.uniquecasper.desktranslate.learning.VocabularyEntry
 import com.uniquecasper.desktranslate.learning.VocabularyStore
+import com.uniquecasper.desktranslate.overlay.TranslationOverlay
 import com.uniquecasper.desktranslate.security.CredentialStore
 import com.uniquecasper.desktranslate.translation.ProviderClient
 import com.uniquecasper.desktranslate.translation.ProviderConfig
@@ -51,6 +54,7 @@ class MainActivity : ComponentActivity() {
     private val recognizedText = mutableStateOf("")
     private val statusText = mutableStateOf("Ready")
     private var requestedScript = "Latin"
+    private lateinit var translationOverlay: TranslationOverlay
 
     private val projectionLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -86,6 +90,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        translationOverlay = TranslationOverlay(this)
         val filter = IntentFilter().apply {
             addAction(CaptureService.ACTION_OCR_RESULT)
             addAction(CaptureService.ACTION_CAPTURE_STATUS)
@@ -103,6 +108,7 @@ class MainActivity : ComponentActivity() {
                     DeskTranslateScreen(
                         recognizedText = recognizedText.value,
                         status = statusText.value,
+                        onShowOverlay = { text -> showTranslationOverlay(text) },
                         onStartCapture = { script ->
                             requestedScript = script
                             val manager = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
@@ -118,7 +124,26 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun showTranslationOverlay(text: String) {
+        if (!Settings.canDrawOverlays(this)) {
+            statusText.value = "Allow Display over other apps, then tap Show floating overlay again."
+            val settingsIntent = Intent(
+                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                Uri.parse("package:$packageName")
+            )
+            startActivity(settingsIntent)
+            return
+        }
+        try {
+            translationOverlay.show(text)
+            statusText.value = "Translation is visible in a floating window."
+        } catch (error: Exception) {
+            statusText.value = "Could not show overlay: " + (error.message ?: error.javaClass.simpleName)
+        }
+    }
+
     override fun onDestroy() {
+        translationOverlay.hide()
         unregisterReceiver(receiver)
         super.onDestroy()
     }
@@ -129,7 +154,8 @@ private fun DeskTranslateScreen(
     recognizedText: String,
     status: String,
     onStartCapture: (String) -> Unit,
-    onStopCapture: () -> Unit
+    onStopCapture: () -> Unit,
+    onShowOverlay: (String) -> Unit
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -244,6 +270,10 @@ private fun DeskTranslateScreen(
                         }
                     }
                 ) { Text(if (busy) "Working…" else "Translate") }
+                TextButton(
+                    enabled = translation.isNotBlank(),
+                    onClick = { onShowOverlay(translation) }
+                ) { Text("Show floating overlay") }
             }
         }
 

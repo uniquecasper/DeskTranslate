@@ -210,7 +210,6 @@ def test_delete_selected_requires_explicit_confirmation(learning_page, monkeypat
     assert page.match_count == 0
 
 
-
 def test_learning_page_shows_new_words_in_the_review_queue(learning_page):
     page, store = learning_page
     store.add("hello", "merhaba", "en", "tr")

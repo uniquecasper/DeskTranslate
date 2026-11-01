@@ -76,8 +76,8 @@ object ProviderClient {
     }
 
     internal fun describeHttpError(code: Int, body: String, apiKey: String = ""): String {
-        val detail = extractErrorDetail(body)
-            .replace(apiKey, if (apiKey.isBlank()) "" else "[redacted]")
+        val extracted = extractErrorDetail(body)
+        val detail = (if (apiKey.isBlank()) extracted else extracted.replace(apiKey, "[redacted]"))
             .replace(Regex("(?i)(sk-[A-Za-z0-9_-]{8,}|AIza[0-9A-Za-z_-]{20,})"), "[redacted]")
             .replace(Regex("\\s+"), " ")
             .trim()

@@ -553,3 +553,69 @@ def test_suppressed_result_only_opens_main_for_explicit_one_shot(window, monkeyp
         assert calls == (["opened"] if once else [])
         assert window.result_translation.text() == "Authored result"
         assert ("overlay cannot fit" in window.status_label.text()) is (not once)
+
+
+def test_double_clicking_a_recognized_word_emits_the_selected_word(window):
+    from PySide6.QtCore import QPoint, Qt
+    from PySide6.QtGui import QFontMetrics
+    from PySide6.QtTest import QTest
+
+    activated = []
+    window.result_source.setText("hello world")
+    window.result_source.setFixedSize(320, 48)
+    window.result_source.wordActivated.connect(activated.append)
+    window.show()
+    QApplication.processEvents()
+
+    metrics = QFontMetrics(window.result_source.font())
+    word = "hello"
+    x = max(1, metrics.horizontalAdvance("hello") // 2)
+    QTest.mouseDClick(
+        window.result_source,
+        Qt.MouseButton.LeftButton,
+        pos=QPoint(x, window.result_source.height() // 2),
+    )
+    QApplication.processEvents()
+
+    assert activated == [word]
+
+
+def test_dictionary_dialog_shows_meaning_definition_example_and_attribution(window, monkeypatch):
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QMessageBox
+
+    from desktranslate.dictionary import DictionarySense, EnglishDictionaryEntry
+
+    captured = []
+    monkeypatch.setattr(
+        QMessageBox,
+        "exec",
+        lambda dialog: captured.append(
+            (dialog.text(), dialog.informativeText(), dialog.textFormat())
+        ),
+    )
+
+    window.show_word_lookup_result(
+        "run",
+        "koşmak",
+        "en",
+        "tr",
+        dictionary_entry=EnglishDictionaryEntry(
+            "run",
+            (DictionarySense("verb", "To move swiftly on foot.", "She runs every morning."),),
+            ("https://en.wiktionary.org/wiki/run",),
+            "CC BY-SA 3.0",
+            "https://creativecommons.org/licenses/by-sa/3.0/",
+        ),
+    )
+
+    assert len(captured) == 1
+    body, attribution, text_format = captured[0]
+    assert text_format == Qt.TextFormat.PlainText
+    assert "Meaning (Turkish):" in body
+    assert "koşmak" in body
+    assert "English explanation and example" in body
+    assert "To move swiftly on foot." in body
+    assert "She runs every morning." in body
+    assert "dictionaryapi.dev" in attribution
+    assert "CC BY-SA 3.0" in attribution

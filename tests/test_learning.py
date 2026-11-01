@@ -113,6 +113,8 @@ def test_result_labels_keep_both_mouse_selections_until_save_click(headless_appl
     host = QWidget()
     layout = QVBoxLayout(host)
     source = SelectableLabel("hello world")
+    activated: list[str] = []
+    source.wordActivated.connect(activated.append)
     translation = SelectableLabel("merhaba dunya")
     save_button = QPushButton("Save")
     for widget in (source, translation):
@@ -125,6 +127,7 @@ def test_result_labels_keep_both_mouse_selections_until_save_click(headless_appl
 
     _double_click_word(source, "hello")
     assert source.selectedText() == "hello"
+    assert activated == ["hello"]
 
     # Selecting the translation moves focus away from the source label.
     _double_click_word(translation, "merhaba")

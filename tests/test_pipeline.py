@@ -102,6 +102,79 @@ class OCR:
         pass
 
 
+def test_code_is_masked_from_provider_and_restored_in_delivered_result():
+    class CodeOCR:
+        def recognize(self, image, language, vertical=False):
+            return OCRResult(
+                "Explain this value:\nconst hidden = 42;\nIt stays unchanged.",
+                confidence=0.99,
+            )
+
+        def close(self):
+            pass
+
+    class RecordingProvider:
+        capabilities = Capabilities(context=True)
+
+        def __init__(self):
+            self.requests = []
+
+        def translate(self, request):
+            self.requests.append(request)
+            translated = request.text.replace(
+                "Explain this value:", "Bu değeri açıklayın:"
+            ).replace("It stays unchanged.", "Aynı kalır.")
+            return TranslationResult(translated)
+
+        def close(self):
+            pass
+
+    provider = RecordingProvider()
+    pipeline = Pipeline(
+        Settings(quality="fast", recent_region=[0, 0, 120, 80]),
+        lambda: Capture(),
+        CodeOCR,
+        lambda: provider,
+        once=True,
+    )
+    pipeline.context.accept(
+        "const previous_secret = 9;\nThe prior dialogue.",
+        "const prev = 9;\nÖnceki diyalog.",
+    )
+    events = []
+    pipeline.start()
+    try:
+
+        def delivered():
+            events.extend(pipeline.poll())
+            failure = next(
+                (event for event in events if event.state == SessionState.ERROR),
+                None,
+            )
+            if failure is not None:
+                pytest.fail(
+                    f"Pipeline failed before delivering translation: "
+                    f"{failure.category}: {failure.error}"
+                )
+            return any(event.result is not None for event in events)
+
+        until(delivered)
+        assert len(provider.requests) == 1
+        request = provider.requests[0]
+        assert "const hidden = 42;" not in request.text
+        assert "DTXQZ_LOCK_" in request.text
+        assert all(
+            "previous_secret" not in pair.source + pair.translation for pair in request.context
+        )
+        translated_event = next(event for event in reversed(events) if event.result is not None)
+        assert translated_event.result is not None
+        assert "const hidden = 42;\n" in translated_event.result.text
+        assert "Bu değeri açıklayın:" in translated_event.result.text
+    finally:
+        pipeline.stop()
+        assert pipeline.wait_closed()
+
+
 class SlowProvider:
     capabilities = Capabilities(context=True)
 

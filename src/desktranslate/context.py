@@ -44,7 +44,7 @@ class TranslationContext:
 def cache_key(provider: str, endpoint: str, request: TranslationRequest) -> str:
     from dataclasses import asdict
 
-    data = {"prompt_version": 2, "provider": provider, "endpoint": endpoint, **asdict(request)}
+    data = {"prompt_version": 3, "provider": provider, "endpoint": endpoint, **asdict(request)}
     return hashlib.sha256(json.dumps(data, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
 
 

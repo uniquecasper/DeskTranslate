@@ -1007,6 +1007,8 @@ class MainWindow(QMainWindow):
         dialog = QMessageBox(self)
         dialog.setWindowTitle("Word dictionary")
         dialog.setIcon(QMessageBox.Icon.Information)
+        # OCR and provider text are untrusted; never let Qt interpret it as rich text.
+        dialog.setTextFormat(Qt.TextFormat.PlainText)
         dialog.setText("\n\n".join(sections))
 
         attribution: list[str] = []

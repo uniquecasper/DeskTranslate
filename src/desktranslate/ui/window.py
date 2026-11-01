@@ -829,15 +829,15 @@ class MainWindow(QMainWindow):
             return
 
         snapshot = copy.deepcopy(self.settings)
+        from desktranslate.vocabulary import (
+            MAX_ENTRIES,
+            MAX_LIST_LIMIT,
+            VocabularyEntry,
+            VocabularyStore,
+        )
+
         local_matches: list[VocabularyEntry] = []
         try:
-            from desktranslate.vocabulary import (
-                MAX_ENTRIES,
-                MAX_LIST_LIMIT,
-                VocabularyEntry,
-                VocabularyStore,
-            )
-
             store = VocabularyStore(data_dir() / "vocabulary.sqlite3")
             offset = 0
             while offset < MAX_ENTRIES:

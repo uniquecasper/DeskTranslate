@@ -15,19 +15,19 @@ _TICK = chr(96)
 _LINE_PATTERNS = tuple(
     re.compile(pattern, re.IGNORECASE)
     for pattern in (
-        r"^\\s*(?:def|class|function|func)\\s+[A-Za-z_$][\\w$]*",
-        r"^\\s*(?:(?:public|private|protected|internal|static|async|sealed|abstract)\\s+)+(?:class|interface|enum|struct|void|int|string|bool|Task(?:<[^>]+>)?)\\b",
-        r"^\\s*(?:const|let|var)\\s+[A-Za-z_$][\\w$]*\\s*(?::[^=]+)?=",
-        r"^\\s*(?:import|from)\\s+[\\w.*]+",
-        r"^\\s*(?:using|namespace|package)\\s+[\\w.]+;?\\s*$",
-        r"^\\s*return\\s+[A-Za-z_$][\\w$]*\\s*(?:[;(]|$)",
-        r"^\\s*(?:if|for|while|switch|catch)\\s*\\(",
-        r"^\\s*(?:#include|#!/|>>>|\\$\\s)",
-        r"^\\s*[{}\\[\\]]+;?\\s*$",
-        r"^\\s*[A-Za-z_$][\\w$.[\\]]*\\s*(?:=|:=|=>)\\s*\\S",
-        r"^\\s*(?:console\\.log|print|System\\.out\\.print|printf)\\s*\\(",
-        r"^\\s*(?:SELECT\\s+.+\\s+FROM|INSERT\\s+INTO|UPDATE\\s+.+\\s+SET|DELETE\\s+FROM|CREATE\\s+(?:TABLE|INDEX|VIEW)|ALTER\\s+TABLE|DROP\\s+TABLE)\\b",
-        r"^\\s*(?:[A-Za-z]:\\\\|/)[\\w.\\-/\\\\]+$",
+        r"^\s*(?:def|class|function|func)\s+[A-Za-z_$][\w$]*",
+        r"^\s*(?:(?:public|private|protected|internal|static|async|sealed|abstract)\s+)+(?:class|interface|enum|struct|void|int|string|bool|Task(?:<[^>]+>)?)\b",
+        r"^\s*(?:const|let|var)\s+[A-Za-z_$][\w$]*\s*(?::[^=]+)?=",
+        r"^\s*(?:import|from)\s+[\w.*]+",
+        r"^\s*(?:using|namespace|package)\s+[\w.]+;?\s*$",
+        r"^\s*return\s+[A-Za-z_$][\w$]*\s*(?:[;(]|$)",
+        r"^\s*(?:if|for|while|switch|catch)\s*\(",
+        r"^\s*(?:#include|#!/|>>>|\$\s)",
+        r"^\s*[{}\[\]]+;?\s*$",
+        r"^\s*[A-Za-z_$][\w$.[\]]*\s*(?:=|:=|=>)\s*\S",
+        r"^\s*(?:console\.log|print|System\.out\.print|printf)\s*\(",
+        r"^\s*(?:SELECT\s+(?:\*|[\w.]+(?:\s*,\s*[\w.]+)*)\s+FROM\s+[\w.]+|INSERT\s+INTO\s+[\w.]+|UPDATE\s+[\w.]+\s+SET\s+[\w.]+\s*=|DELETE\s+FROM\s+[\w.]+|CREATE\s+(?:TABLE|INDEX|VIEW)\s+[\w.]+|ALTER\s+TABLE\s+[\w.]+|DROP\s+TABLE\s+[\w.]+)\b",
+        r"^\s*(?:[A-Za-z]:\\|/)[\w.\-/\\]+$",
     )
 )
 

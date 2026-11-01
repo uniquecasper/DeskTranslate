@@ -251,7 +251,7 @@ class CaptureService : Service() {
         const val EXTRA_TEXT = "text"
         private const val CHANNEL_ID = "desktranslate_capture"
         private const val NOTIFICATION_ID = 4102
-        private const val FRAME_INTERVAL_MS = 1200L
+        private const val FRAME_INTERVAL_MS = 800L
         private const val MAX_TEXT_CHARS = 12000
     }
 }

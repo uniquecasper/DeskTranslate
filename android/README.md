@@ -21,9 +21,9 @@ This is a separate native Android application. It does not package or modify the
 
 ## Architecture references
 
-- ALSTMobile (MIT): MediaProjection service lifecycle, coordinate-aligned screen overlay and floating control patterns.
-- TextGrab (MIT): word/line OCR structure, confidence-aware recognition and separation between OCR and translation engines.
-- AidanPark/screen-translator: area-crop and stable-target design at Apache-2.0 commit `8717cf0`. No source from later PolyForm Noncommercial revisions is used.
+- TextGrab (MIT): word/line OCR structure, confidence-aware recognition and translation-engine separation; word-level tap selection remains future work.
+- ALSTMobile (MIT): MediaProjection lifecycle, coordinate-aligned translation blocks and draggable overlay-control design.
+- AidanPark/screen-translator: focused crop retry and stable-target concepts, referenced only from Apache-2.0 commit `8717cf0`; no source from later PolyForm Noncommercial revisions is used.
 
 DeskTranslate's code is implemented separately and retains its own API-key storage, endpoint validation, bounded requests and translation-provider adapters. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 

@@ -8,7 +8,7 @@ Translate the dialogue in a game, subtitles in a video, a menu, or text in an im
 
 [Release readiness](docs/release-readiness.md) · [Acceptance matrix](docs/validation.md) · [Non-invasive testing](docs/testing.md) · [Published releases](https://github.com/DeskTranslate/DeskTranslate/releases) · [Getting started](#your-first-translation) · [Upgrade guide](docs/upgrade.md)
 
-**DeskTranslate 2.0.0** brings a rebuilt Windows experience, managed local OCR, continuous dialogue handling, contextual translation, title profiles and an editable subtitle overlay. [Download the Windows release](https://github.com/DeskTranslate/DeskTranslate/releases/tag/v2.0.0). Binaries are currently unsigned; see the Windows warning below.
+**DeskTranslate 2.1.0** adds selected-word dictionary details, source-code protection and spaced-repetition vocabulary review to the rebuilt Windows screen translator. [Download the Windows release](https://github.com/DeskTranslate/DeskTranslate/releases/tag/v2.1.0). Release files include Sigstore signatures and GitHub attestations; they are not Authenticode publisher-signed, so Windows may show a SmartScreen warning.
 
 
 ![DeskTranslate 2 in its midnight mint theme, showing synthetic Japanese dialogue](docs/screenshots/translate-dark.png)
@@ -32,7 +32,7 @@ Save a setup for each game, show or task, then load it when you're ready. The ex
 
 ## Install
 
-Download **Windows x64**, primarily Windows 11. The installer's configured minimum is Windows 10 build19041; that setting does not establish current Microsoft support or successful runtime/hardware qualification. Download `DeskTranslate-2.0.0-Setup-x64.exe` from the [official release page](https://github.com/DeskTranslate/DeskTranslate/releases/tag/v2.0.0). Installation is per user and needs no administrator account. Normal users need no Python, pip, Visual Studio, Tesseract, or manual DLL installation. See the [acceptance matrix](docs/validation.md).
+Download **Windows x64**, primarily Windows 11. The installer's configured minimum is Windows 10 build19041; that setting does not establish current Microsoft support or successful runtime/hardware qualification. Download `DeskTranslate-2.1.0-Setup-x64.exe` from the [official release page](https://github.com/DeskTranslate/DeskTranslate/releases/tag/v2.1.0). Installation is per user and needs no administrator account. Normal users need no Python, pip, Visual Studio, Tesseract, or manual DLL installation. See the [acceptance matrix](docs/validation.md).
 
 For portable use, extract the **entire** ZIP into a writable folder and launch `DeskTranslate.exe`. Keep `_internal` and `portable-mode` beside it. Portable settings, logs, and downloaded models live in `DeskTranslateData` beside the executable; installed builds use `%LOCALAPPDATA%\DeskTranslate`. Credentials remain in your Windows account's vault. Move the entire folder to retain portable data.
 

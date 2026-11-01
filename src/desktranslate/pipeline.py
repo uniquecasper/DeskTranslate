@@ -717,13 +717,13 @@ class Pipeline:
                     request, text=protected.masked_text, context=safe_context
                 )
                 result = (
-                    TranslationResult(work.text)
-                    if protected.only_code
-                    else self.cache.get(key)
+                    TranslationResult(work.text) if protected.only_code else self.cache.get(key)
                 )
                 start = time.monotonic()
                 exact_term = (
-                    None if protected.only_code else self.context_engine.terminology.exact(work.text)
+                    None
+                    if protected.only_code
+                    else self.context_engine.terminology.exact(work.text)
                 )
                 if result is None and exact_term is not None:
                     result = TranslationResult(exact_term)
@@ -736,6 +736,7 @@ class Pipeline:
                 else:
                     self.counters["translations"] += 1
                     try:
+
                         def translate_part(
                             part_request: TranslationRequest,
                             active_provider: TranslationProvider = provider,
@@ -763,8 +764,10 @@ class Pipeline:
                                 segment = provider_request.text[cursor:token_at]
                                 leading = segment[: len(segment) - len(segment.lstrip())]
                                 trailing = segment[len(segment.rstrip()) :]
-                                middle_end = len(segment) - len(trailing) if trailing else len(segment)
-                                middle = segment[len(leading):middle_end]
+                                middle_end = (
+                                    len(segment) - len(trailing) if trailing else len(segment)
+                                )
+                                middle = segment[len(leading) : middle_end]
                                 if middle:
                                     part_result = translate_part(
                                         replace(provider_request, text=middle, context=())
@@ -781,7 +784,7 @@ class Pipeline:
                             leading = tail[: len(tail) - len(tail.lstrip())]
                             trailing = tail[len(tail.rstrip()) :]
                             tail_end = len(tail) - len(trailing) if trailing else len(tail)
-                            middle = tail[len(leading):tail_end]
+                            middle = tail[len(leading) : tail_end]
                             if middle:
                                 part_result = translate_part(
                                     replace(provider_request, text=middle, context=())

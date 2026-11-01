@@ -184,8 +184,7 @@ class VocabularyReviewDialog(QDialog):
         if self.position >= len(self.items):
             self.progress_label.setText("Review session complete")
             self.word_label.setText(
-                f"You reviewed {len(self.items)} "
-                f"{'word' if len(self.items) == 1 else 'words'}."
+                f"You reviewed {len(self.items)} {'word' if len(self.items) == 1 else 'words'}."
             )
             self.answer_label.hide()
             self.show_answer_button.hide()

@@ -895,6 +895,7 @@ class MainWindow(QMainWindow):
         self.notice(f"Looking up “{word}”…")
 
         def operation() -> object:
+            local_provider_error = provider_error
             dictionary_entry: EnglishDictionaryEntry | None = None
             if snapshot.source == "en":
                 try:
@@ -925,16 +926,16 @@ class MainWindow(QMainWindow):
                     )
                     translation = result.text.strip()
                 except DeskTranslateError as error:
-                    provider_error = str(error)
+                    local_provider_error = str(error)
                 finally:
                     provider.close()
 
             if not translation and dictionary_entry is None:
                 raise DeskTranslateError(
-                    provider_error
+                    local_provider_error
                     or "No dictionary entry or translation was available for this word."
                 )
-            return (translation, dictionary_entry, provider_error)
+            return (translation, dictionary_entry, local_provider_error)
 
         def complete(result: object, error: str) -> None:
             if self.closing:

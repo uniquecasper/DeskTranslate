@@ -247,6 +247,21 @@ class VocabularyReviewStore:
             result.append(ReviewItem(entry, state))
         return result
 
+    def delete_entry(self, entry_id: int) -> bool:
+        """Delete a vocabulary entry and its review state in one transaction."""
+        entry_id = _entry_id(entry_id)
+        with self._session(write=True) as connection:
+            cursor = connection.execute(
+                "DELETE FROM vocabulary_entries WHERE id = ?",
+                (entry_id,),
+            )
+            if cursor.rowcount:
+                connection.execute(
+                    "DELETE FROM vocabulary_review_state WHERE entry_id = ?",
+                    (entry_id,),
+                )
+            return cursor.rowcount > 0
+
     def review(
         self,
         entry_id: int,

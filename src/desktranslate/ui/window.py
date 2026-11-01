@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from PySide6.QtCore import QSize, Qt, QTimer, QUrl, Signal
-from PySide6.QtGui import QAction, QCloseEvent, QDesktopServices, QFocusEvent, QResizeEvent
+from PySide6.QtGui import QAction, QCloseEvent, QDesktopServices, QFocusEvent, QMouseEvent, QResizeEvent
 from PySide6.QtWidgets import (
     QApplication,
     QBoxLayout,
@@ -83,8 +83,8 @@ class SelectableLabel(QLabel):
             selected_length = len(selected_text.encode("utf-16-le", "surrogatepass")) // 2
             self.setSelection(selection_start, selected_length)
 
-    def mouseDoubleClickEvent(self, event: object) -> None:
-        super().mouseDoubleClickEvent(event)  # type: ignore[arg-type]
+    def mouseDoubleClickEvent(self, event: QMouseEvent) -> None:
+        super().mouseDoubleClickEvent(event)
         selected = self.selectedText().strip()
         if selected and len(selected) <= 100 and any(character.isalnum() for character in selected):
             self.wordActivated.emit(selected)

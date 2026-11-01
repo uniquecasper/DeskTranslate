@@ -119,7 +119,7 @@ jobs:
         run: |
           Copy-Item docs/soak-2h-hosted.json docs/soak-2h.json -Force
           Copy-Item docs/soak-chaos-hosted.json docs/soak-chaos.json -Force
-          python -c "import hashlib,json,subprocess; from pathlib import Path; from desktranslate import __version__; from tools.release_support import runtime_source_hashes; root=Path.cwd(); p=root/'docs/manual-qualification.json'; d=json.loads(p.read_text()); d['version']=__version__; d['target']=__version__+' stable'; d['verdict']='Required 2.1.0 release gates passed on the hosted Windows runner; final stable artifacts are rebuilt from this exact commit.'; d['gates'].update({k:True for k in ('clean_windows','installer_upgrade','prolonged_media','media_pipeline','context_bounds')}); d['unsigned_release_approved']=True; d['unsigned_disclosure']='This release uses keyless Sigstore signatures and GitHub build attestations. No Authenticode publisher certificate is configured; Windows may show an unknown-publisher or SmartScreen warning.'; d['notes']='This report is generated only after the release workflow has passed pre-deployment tests, packaged startup, frozen runtime/OCR, installer-upgrade, artifact privacy, two-hour steady endurance and thirty-minute fault endurance on the exact 2.1.0 source.'; d['qualified_application_commit']=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(); d['qualified_application_sha256']=hashlib.sha256(json.dumps(runtime_source_hashes(root),sort_keys=True).encode()).hexdigest(); p.write_text(json.dumps(d,indent=2)+'\\n',encoding='utf-8')"
+          python -c "import hashlib,json,subprocess; from pathlib import Path; from desktranslate import __version__; from tools.release_support import runtime_source_hashes; root=Path.cwd(); p=root/'docs/manual-qualification.json'; d=json.loads(p.read_text()); d['version']=__version__; d['target']=__version__+' stable'; d['verdict']='Required 2.1.0 release gates passed on the hosted Windows runner; final stable artifacts are rebuilt from this exact commit.'; d['gates'].update({k:True for k in ('clean_windows','installer_upgrade','prolonged_media','media_pipeline','context_bounds')}); d['unsigned_release_approved']=True; d['unsigned_disclosure']='This release uses keyless Sigstore signatures and GitHub build attestations. No Authenticode publisher certificate is configured; Windows may show an unknown-publisher or SmartScreen warning.'; d['notes']='This report is generated only after the release workflow has passed pre-deployment tests, packaged startup, frozen runtime/OCR, installer-upgrade, artifact privacy, two-hour steady endurance and thirty-minute fault endurance on the exact 2.1.0 source.'; d['qualified_application_commit']=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(); d['qualified_application_sha256']=hashlib.sha256(json.dumps(runtime_source_hashes(root),sort_keys=True).encode()).hexdigest(); p.write_text(json.dumps(d,indent=2)+'\n',encoding='utf-8')"
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python tools/build.py --installer --stable --tag v2.1.0
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
@@ -171,9 +171,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $tag = 'v2.1.0'
-          git rev-parse --verify "refs/tags/$tag" *> $null
-          if ($LASTEXITCODE -eq 0) { throw "Tag $tag already exists; refusing to retarget or overwrite it." }
-          if ($LASTEXITCODE -ne 1) { throw 'Could not safely check whether the release tag already exists.' }
+          $existingTag = git tag --list $tag
+          if ($LASTEXITCODE -ne 0) { throw 'Could not safely check whether the release tag already exists.' }
+          if ($existingTag) { throw "Tag $tag already exists; refusing to retarget or overwrite it." }
           $null = Get-Command gh -ErrorAction Stop
           $assets = @(Get-ChildItem -LiteralPath dist -File | ForEach-Object { $_.FullName })
           $evidence = @(

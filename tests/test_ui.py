@@ -553,3 +553,27 @@ def test_suppressed_result_only_opens_main_for_explicit_one_shot(window, monkeyp
         assert calls == (["opened"] if once else [])
         assert window.result_translation.text() == "Authored result"
         assert ("overlay cannot fit" in window.status_label.text()) is (not once)
+
+def test_double_clicking_a_recognized_word_emits_the_selected_word(window):
+    from PySide6.QtCore import QPoint, Qt
+    from PySide6.QtGui import QFontMetrics
+    from PySide6.QtTest import QTest
+
+    activated = []
+    window.result_source.setText("hello world")
+    window.result_source.setFixedSize(320, 48)
+    window.result_source.wordActivated.connect(activated.append)
+    window.show()
+    QApplication.processEvents()
+
+    metrics = QFontMetrics(window.result_source.font())
+    word = "hello"
+    x = metrics.horizontalAdvance("hello ") - metrics.horizontalAdvance(" ") // 2
+    QTest.mouseDClick(
+        window.result_source,
+        Qt.MouseButton.LeftButton,
+        pos=QPoint(x, window.result_source.height() // 2),
+    )
+    QApplication.processEvents()
+
+    assert activated == [word]

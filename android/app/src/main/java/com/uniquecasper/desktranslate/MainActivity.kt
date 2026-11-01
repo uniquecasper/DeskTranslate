@@ -326,18 +326,21 @@ private fun DeskTranslateScreen(
         ).joinToString("\u0000")
         if (signature == lastAutoAttemptSignature) return@LaunchedEffect
 
-        // Let OCR settle, then wait out the cooldown without tying the network call
-        // to this effect. OCR updates can cancel this effect, but must not cancel a
-        // request already in progress.
-        delay(1200)
-        if (recognizedText.trim().take(12000) != candidate) return@LaunchedEffect
-
-        val elapsed = SystemClock.elapsedRealtime() - lastAutoTranslationAt
-        val remaining = AUTO_TRANSLATION_COOLDOWN_MS - elapsed
-        if (remaining > 0) delay(remaining)
+        // OCR frames arrive frequently. A long debounce or a cooldown delay inside
+        // this keyed effect is cancelled by the next frame, so translations never run
+        // on animated screens. Debounce briefly, then skip (rather than wait through)
+        // the request throttle; the next changed OCR frame gets another chance.
+        delay(OCR_STABILIZATION_DELAY_MS)
         if (recognizedText.trim().take(12000) != candidate || busy) return@LaunchedEffect
 
+        val elapsed = SystemClock.elapsedRealtime() - lastAutoTranslationAt
+        if (lastAutoTranslationAt > 0L && elapsed < AUTO_TRANSLATION_COOLDOWN_MS) {
+            message = "Screen text recognized. Waiting for the next translation interval."
+            return@LaunchedEffect
+        }
+
         lastAutoAttemptSignature = signature
+        lastAutoTranslationAt = SystemClock.elapsedRealtime()
         scope.launch {
             translateText(candidate, automatic = true)
         }
@@ -554,4 +557,5 @@ private fun VocabularyRow(entry: VocabularyEntry, onDelete: () -> Unit) {
     }
 }
 
-private const val AUTO_TRANSLATION_COOLDOWN_MS = 8_000L
+private const val AUTO_TRANSLATION_COOLDOWN_MS = 2_500L
+private const val OCR_STABILIZATION_DELAY_MS = 350L

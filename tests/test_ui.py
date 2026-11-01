@@ -580,9 +580,7 @@ def test_double_clicking_a_recognized_word_emits_the_selected_word(window):
     assert activated == [word]
 
 
-def test_dictionary_dialog_shows_meaning_definition_example_and_attribution(
-    window, monkeypatch
-):
+def test_dictionary_dialog_shows_meaning_definition_example_and_attribution(window, monkeypatch):
     from PySide6.QtWidgets import QMessageBox
 
     from desktranslate.dictionary import DictionarySense, EnglishDictionaryEntry

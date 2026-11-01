@@ -7,7 +7,6 @@ import android.graphics.drawable.GradientDrawable
 import android.provider.Settings
 import android.view.Gravity
 import android.view.MotionEvent
-import android.view.View
 import android.view.WindowManager
 import android.widget.LinearLayout
 import android.widget.ScrollView

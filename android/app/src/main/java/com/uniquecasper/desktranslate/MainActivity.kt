@@ -58,7 +58,8 @@ class MainActivity : ComponentActivity() {
     private var requestedScript = "Latin"
     private lateinit var translationOverlay: TranslationOverlay
     private var pendingOverlayText: String? = null
-    private var overlayPermissionPrompted = false
+    private var pendingCaptureScript: String? = null
+    private val overlayPermissionGranted = mutableStateOf(false)
 
     private val projectionLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -72,8 +73,8 @@ class MainActivity : ComponentActivity() {
                 putExtra(CaptureService.EXTRA_SCRIPT, requestedScript)
             }
             startForegroundService(service)
-            statusText.value = "Capture started. Switch to the app or game you want to translate."
-            requestOverlayPermissionForSession()
+            statusText.value = "Capture started. DeskTranslate is moving to the background; open the app or game you want to translate."
+            moveTaskToBack(true)
         } else {
             statusText.value = "Screen capture permission was declined."
         }
@@ -96,6 +97,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         translationOverlay = TranslationOverlay(this)
+        overlayPermissionGranted.value = Settings.canDrawOverlays(this)
         val filter = IntentFilter().apply {
             addAction(CaptureService.ACTION_OCR_RESULT)
             addAction(CaptureService.ACTION_CAPTURE_STATUS)
@@ -114,11 +116,9 @@ class MainActivity : ComponentActivity() {
                         recognizedText = recognizedText.value,
                         status = statusText.value,
                         onShowOverlay = { text -> showTranslationOverlay(text) },
-                        onStartCapture = { script ->
-                            requestedScript = script
-                            val manager = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-                            projectionLauncher.launch(manager.createScreenCaptureIntent())
-                        },
+                        overlayPermissionGranted = overlayPermissionGranted.value,
+                        onRequestOverlayPermission = { openOverlayPermissionSettings() },
+                        onStartCapture = { script -> startCaptureWhenReady(script) },
                         onStopCapture = {
                             startService(Intent(this, CaptureService::class.java).setAction(CaptureService.ACTION_STOP))
                             statusText.value = "Capture stopped."
@@ -129,15 +129,40 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun requestOverlayPermissionForSession() {
-        if (Settings.canDrawOverlays(this) || overlayPermissionPrompted) return
-        overlayPermissionPrompted = true
-        statusText.value = "Grant Display over other apps so translations can appear automatically."
-        val settingsIntent = Intent(
-            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-            Uri.parse("package:$packageName")
-        )
-        startActivity(settingsIntent)
+    private fun startCaptureWhenReady(script: String) {
+        if (Settings.canDrawOverlays(this)) {
+            launchScreenCaptureConsent(script)
+            return
+        }
+        pendingCaptureScript = script
+        statusText.value =
+            "Enable Display over other apps first. Screen capture will start after you grant it."
+        openOverlayPermissionSettings()
+    }
+
+    private fun launchScreenCaptureConsent(script: String) {
+        requestedScript = script
+        val manager = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+        projectionLauncher.launch(manager.createScreenCaptureIntent())
+    }
+
+    private fun openOverlayPermissionSettings() {
+        if (Settings.canDrawOverlays(this)) {
+            overlayPermissionGranted.value = true
+            return
+        }
+        try {
+            startActivity(
+                Intent(
+                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    Uri.parse("package:$packageName")
+                )
+            )
+        } catch (error: Exception) {
+            statusText.value =
+                "Could not open overlay permission settings: " +
+                (error.message ?: error.javaClass.simpleName)
+        }
     }
 
     private fun showTranslationOverlay(text: String) {
@@ -158,8 +183,23 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        val hasOverlayPermission = Settings.canDrawOverlays(this)
+        overlayPermissionGranted.value = hasOverlayPermission
+
+        val captureScript = pendingCaptureScript
+        if (captureScript != null) {
+            pendingCaptureScript = null
+            if (hasOverlayPermission) {
+                statusText.value = "Floating permission granted. Approve screen capture to continue."
+                launchScreenCaptureConsent(captureScript)
+            } else {
+                statusText.value =
+                    "Floating permission is still disabled. Enable it before starting automatic capture."
+            }
+        }
+
         val pending = pendingOverlayText
-        if (pending != null && Settings.canDrawOverlays(this)) {
+        if (pending != null && hasOverlayPermission) {
             showTranslationOverlay(pending)
         }
     }
@@ -175,6 +215,8 @@ class MainActivity : ComponentActivity() {
 private fun DeskTranslateScreen(
     recognizedText: String,
     status: String,
+    overlayPermissionGranted: Boolean,
+    onRequestOverlayPermission: () -> Unit,
     onStartCapture: (String) -> Unit,
     onStopCapture: () -> Unit,
     onShowOverlay: (String) -> Unit
@@ -312,6 +354,19 @@ private fun DeskTranslateScreen(
             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Screen capture", style = MaterialTheme.typography.titleMedium)
                 Text(message, style = MaterialTheme.typography.bodySmall)
+                Text(
+                    if (overlayPermissionGranted) {
+                        "Floating panel permission: enabled."
+                    } else {
+                        "Floating panel permission: disabled."
+                    },
+                    style = MaterialTheme.typography.bodySmall
+                )
+                if (!overlayPermissionGranted) {
+                    TextButton(onClick = onRequestOverlayPermission) {
+                        Text("Enable floating panel")
+                    }
+                }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(onClick = { onStartCapture(script) }) { Text("Start capture") }
                     TextButton(onClick = onStopCapture) { Text("Stop") }
@@ -324,8 +379,8 @@ private fun DeskTranslateScreen(
                     singleLine = true
                 )
                 Text(
-                    "After capture starts, switch to the app or game you want to translate. " +
-                        "OCR reads the whole screen, including text inside DeskTranslate."
+                    "After you approve capture, DeskTranslate moves to the background. " +
+                        "Open the app or game you want to translate. OCR reads the whole visible screen."
                 )
                 Text("New stable OCR text is translated automatically. The floating panel updates after each successful translation.")
             }

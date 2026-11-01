@@ -18,17 +18,22 @@ data class ProviderConfig(
 
 object ProviderClient {
     fun translate(config: ProviderConfig, text: String, source: String, target: String): String {
-        require(text.isNotBlank() && text.length <= 12000)
-        require(config.model.isNotBlank() && config.model.length <= 200)
-        val provider = config.provider.lowercase()
-        val normalized = config.copy(provider = provider)
+        require(text.isNotBlank() && text.length <= 12000) {
+            "Text to translate is empty or exceeds the 12000-character limit"
+        }
+        require(config.model.isNotBlank() && config.model.length <= 200) {
+            "Model ID is required"
+        }
+        val provider = config.provider.trim().lowercase()
+        val normalized = config.copy(provider = provider, apiKey = config.apiKey.trim())
+        validateCredentials(normalized)
         val base = validateEndpoint(config.endpoint)
         val system = buildPrompt(source, target)
         val (url, body, headers) = requestFor(normalized, base, system, text)
         val connection = (URI(url).toURL().openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"
-            connectTimeout = 5000
-            readTimeout = 25000
+            connectTimeout = 7000
+            readTimeout = 30000
             instanceFollowRedirects = false
             doOutput = true
             setRequestProperty("Content-Type", "application/json; charset=utf-8")
@@ -39,7 +44,10 @@ object ProviderClient {
             connection.outputStream.use { it.write(body.toByteArray(StandardCharsets.UTF_8)) }
             val code = connection.responseCode
             if (code in 300..399) throw IOException("Provider redirects are not allowed")
-            if (code !in 200..299) throw IOException("Provider returned HTTP " + code)
+            if (code !in 200..299) {
+                val errorBody = connection.errorStream?.use { readBounded(it) }.orEmpty()
+                throw IOException(describeHttpError(code, errorBody, normalized.apiKey))
+            }
             val response = connection.inputStream.use { readBounded(it) }
             return parseResponse(provider, response).trim().also {
                 if (it.isBlank() || it.length > 20000) {
@@ -51,8 +59,59 @@ object ProviderClient {
         }
     }
 
+    internal fun validateCredentials(config: ProviderConfig) {
+        when (config.provider.trim().lowercase()) {
+            "openai" -> require(config.apiKey.isNotBlank()) {
+                "OpenAI requires an API key. Enter your key in Provider configuration and press Save key."
+            }
+            "anthropic" -> require(config.apiKey.isNotBlank()) {
+                "Anthropic requires an API key."
+            }
+            "gemini" -> require(config.apiKey.isNotBlank()) {
+                "Gemini requires an API key."
+            }
+            "ollama" -> Unit
+            else -> throw IllegalArgumentException("Unsupported Android provider: " + config.provider)
+        }
+    }
+
+    internal fun describeHttpError(code: Int, body: String, apiKey: String = ""): String {
+        val detail = extractErrorDetail(body)
+            .replace(apiKey, if (apiKey.isBlank()) "" else "[redacted]")
+            .replace(Regex("(?i)(sk-[A-Za-z0-9_-]{8,}|AIza[0-9A-Za-z_-]{20,})"), "[redacted]")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+            .take(320)
+
+        return when (code) {
+            401 -> "Authentication failed (HTTP 401). Check that the API key is correct, active and belongs to the selected provider." +
+                if (detail.isNotBlank()) " Provider detail: $detail" else ""
+            403 -> "Access denied (HTTP 403). Check account permissions, project access and provider billing/settings." +
+                if (detail.isNotBlank()) " Provider detail: $detail" else ""
+            429 -> "Rate limit or quota reached (HTTP 429)." +
+                if (detail.isNotBlank()) " Provider detail: $detail" else ""
+            else -> "Provider returned HTTP $code." +
+                if (detail.isNotBlank()) " Provider detail: $detail" else ""
+        }
+    }
+
+    private fun extractErrorDetail(body: String): String {
+        if (body.isBlank()) return ""
+        return try {
+            val root = JSONObject(body)
+            val error = root.opt("error")
+            when (error) {
+                is JSONObject -> error.optString("message").ifBlank { error.toString() }
+                is String -> error
+                else -> root.optString("message")
+            }
+        } catch (_: Exception) {
+            body
+        }
+    }
+
     internal fun validateEndpoint(endpoint: String): String {
-        require(endpoint.length in 8..2048)
+        require(endpoint.length in 8..2048) { "Provider endpoint is required" }
         val uri = URI(endpoint.trim())
         val scheme = uri.scheme?.lowercase()
         val host = uri.host?.lowercase()
@@ -85,16 +144,18 @@ object ProviderClient {
             "openai", "ollama" -> {
                 val path = if (config.provider == "ollama") "/api/chat" else "/chat/completions"
                 val url = if (base.endsWith(path)) base else base + path
-                val payload = if (config.provider == "ollama") {
-                    JSONObject().put("model", config.model).put("messages", messages).put("stream", false)
+                val payload = JSONObject()
+                    .put("model", config.model)
+                    .put("messages", messages)
+                    .put("stream", false)
+                val auth = if (config.provider == "ollama" || config.apiKey.isBlank()) {
+                    emptyMap()
                 } else {
-                    JSONObject().put("model", config.model).put("messages", messages).put("stream", false)
+                    mapOf("Authorization" to ("Bearer " + config.apiKey))
                 }
-                val auth = if (config.apiKey.isBlank()) emptyMap() else mapOf("Authorization" to ("Bearer " + config.apiKey))
                 Triple(url, payload.toString(), auth)
             }
             "anthropic" -> {
-                require(config.apiKey.isNotBlank()) { "Anthropic requires an API key" }
                 val userMessages = JSONArray().put(JSONObject().put("role", "user").put("content", text))
                 val payload = JSONObject()
                     .put("model", config.model)
@@ -108,7 +169,6 @@ object ProviderClient {
                 )
             }
             "gemini" -> {
-                require(config.apiKey.isNotBlank()) { "Gemini requires an API key" }
                 val content = JSONArray().put(
                     JSONObject().put("parts", JSONArray().put(JSONObject().put("text", system + "\n\n" + text)))
                 )

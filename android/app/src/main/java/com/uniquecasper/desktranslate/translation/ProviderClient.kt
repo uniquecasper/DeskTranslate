@@ -111,8 +111,13 @@ object ProviderClient {
     }
 
     internal fun validateEndpoint(endpoint: String): String {
-        require(endpoint.length in 8..2048) { "Provider endpoint is required" }
-        val uri = URI(endpoint.trim())
+        val raw = endpoint.trim()
+        require(raw.length in 1..2048) { "Provider endpoint is required" }
+
+        // Accept a host pasted without a scheme (for example,
+        // generativelanguage.googleapis.com/v1beta) and make HTTPS explicit.
+        val candidate = if (raw.contains("://")) raw else "https://$raw"
+        val uri = URI(candidate)
         val scheme = uri.scheme?.lowercase()
         val host = uri.host?.lowercase()
         require(uri.userInfo == null && uri.fragment == null && !host.isNullOrBlank()) {

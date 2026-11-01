@@ -270,10 +270,17 @@ private fun DeskTranslateScreen(
                         }
                     }
                 ) { Text(if (busy) "Working…" else "Translate") }
-                TextButton(
+                Button(
                     enabled = translation.isNotBlank(),
-                    onClick = { onShowOverlay(translation) }
+                    onClick = { onShowOverlay(translation) },
+                    modifier = Modifier.fillMaxWidth()
                 ) { Text("Show floating overlay") }
+                if (translation.isBlank()) {
+                    Text(
+                        "Translate text first; the floating overlay button becomes active when a result exists.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
             }
         }
 

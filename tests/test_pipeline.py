@@ -147,6 +147,15 @@ def test_code_is_masked_from_provider_and_restored_in_delivered_result():
 
         def delivered():
             events.extend(pipeline.poll())
+            failure = next(
+                (event for event in events if event.state == SessionState.ERROR),
+                None,
+            )
+            if failure is not None:
+                pytest.fail(
+                    f"Pipeline failed before delivering translation: "
+                    f"{failure.category}: {failure.error}"
+                )
             return any(event.result is not None for event in events)
 
         until(delivered)

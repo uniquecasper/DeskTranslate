@@ -862,9 +862,7 @@ class MainWindow(QMainWindow):
             # A missing or unavailable local dictionary must not block a live lookup.
             local_matches = []
 
-        local_translation = "; ".join(
-            dict.fromkeys(entry.translation for entry in local_matches)
-        )
+        local_translation = "; ".join(dict.fromkeys(entry.translation for entry in local_matches))
         if self.jobs.busy:
             if local_translation:
                 self.show_word_lookup_result(
@@ -989,7 +987,9 @@ class MainWindow(QMainWindow):
         if dictionary_entry is not None:
             sections.append("English explanation and example:")
             for index, sense in enumerate(dictionary_entry.senses, start=1):
-                heading = f"{index}. {sense.part_of_speech}" if sense.part_of_speech else f"{index}."
+                heading = (
+                    f"{index}. {sense.part_of_speech}" if sense.part_of_speech else f"{index}."
+                )
                 sections.append(f"{heading} {sense.definition}")
                 if sense.example:
                     sections.append(f"Example: {sense.example}")
@@ -1013,7 +1013,9 @@ class MainWindow(QMainWindow):
         if dictionary_entry is not None:
             attribution.append("Dictionary data: Free Dictionary API (dictionaryapi.dev)")
             if dictionary_entry.source_urls:
-                attribution.append("Original source(s): " + ", ".join(dictionary_entry.source_urls[:3]))
+                attribution.append(
+                    "Original source(s): " + ", ".join(dictionary_entry.source_urls[:3])
+                )
             if dictionary_entry.license_name:
                 attribution.append("License: " + dictionary_entry.license_name)
             if dictionary_entry.license_url:

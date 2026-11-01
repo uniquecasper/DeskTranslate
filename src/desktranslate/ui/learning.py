@@ -490,7 +490,7 @@ class LearningPage(QWidget):
         if answer != QMessageBox.StandardButton.Yes:
             return
         try:
-            self.store.delete(entry_id)
+            self.review_store.delete_entry(entry_id)
             self.refresh()
         except (OSError, ValueError, RuntimeError):
             self.status_label.setText(

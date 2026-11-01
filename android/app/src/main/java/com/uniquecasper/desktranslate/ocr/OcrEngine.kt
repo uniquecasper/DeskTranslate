@@ -97,7 +97,7 @@ class OcrEngine : AutoCloseable {
                 val text = elements.joinToString(" ") { it.second }
                 val box = Rect(elements.first().first.boundingBox ?: line.boundingBox ?: continue)
                 elements.forEach { item ->
-                    item.first.boundingBox?.let(box::union)
+                    item.first.boundingBox?.let { box.union(it) }
                     weightedScore += item.second.count(Char::isLetterOrDigit) * item.third
                 }
                 val confidence = elements.map { it.third }.average().toFloat()

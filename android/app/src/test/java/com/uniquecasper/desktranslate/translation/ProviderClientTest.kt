@@ -1,7 +1,9 @@
 package com.uniquecasper.desktranslate.translation
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ProviderClientTest {
@@ -37,5 +39,32 @@ class ProviderClientTest {
         assert(prompt.contains("untrusted content"))
         assert(prompt.contains("Japanese"))
         assert(prompt.contains("Turkish"))
+    }
+
+    @Test
+    fun openAiRequiresAnApiKeyBeforeNetworkRequest() {
+        val error = assertThrows(IllegalArgumentException::class.java) {
+            ProviderClient.validateCredentials(ProviderConfig("openai", "https://api.openai.com/v1", "gpt-4.1-mini", ""))
+        }
+        assertTrue(error.message.orEmpty().contains("requires an API key"))
+    }
+
+    @Test
+    fun localOllamaDoesNotRequireAnApiKey() {
+        ProviderClient.validateCredentials(ProviderConfig("ollama", "http://localhost:11434", "llama3.2", ""))
+    }
+
+    @Test
+    fun authenticationErrorExplains401AndRedactsKey() {
+        val key = "sk-test-verysecretkeyvalue"
+        val message = ProviderClient.describeHttpError(
+            401,
+            """{"error":{"message":"Incorrect API key provided: $key"}}""",
+            key
+        )
+        assertTrue(message.contains("HTTP 401"))
+        assertTrue(message.contains("Incorrect API key"))
+        assertFalse(message.contains(key))
+        assertTrue(message.contains("[redacted]"))
     }
 }

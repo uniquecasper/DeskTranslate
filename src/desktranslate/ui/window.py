@@ -9,7 +9,14 @@ from dataclasses import dataclass
 from typing import Any
 
 from PySide6.QtCore import QSize, Qt, QTimer, QUrl, Signal
-from PySide6.QtGui import QAction, QCloseEvent, QDesktopServices, QFocusEvent, QMouseEvent, QResizeEvent
+from PySide6.QtGui import (
+    QAction,
+    QCloseEvent,
+    QDesktopServices,
+    QFocusEvent,
+    QMouseEvent,
+    QResizeEvent,
+)
 from PySide6.QtWidgets import (
     QApplication,
     QBoxLayout,

@@ -4,7 +4,7 @@ import contextlib
 import logging
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from queue import Empty, Queue
 from threading import BoundedSemaphore, Event, Lock, Thread
 from typing import TypeVar
@@ -13,6 +13,7 @@ from PIL import Image
 
 from desktranslate.algorithms import PRESETS, FrameGate, preprocess
 from desktranslate.context import ContextEngine, TranslationCache, TranslationContext, cache_key
+from desktranslate.code_detection import protect_code
 from desktranslate.errors import (
     Cancelled,
     ConfigurationError,
@@ -698,30 +699,49 @@ class Pipeline:
                         replaces_source=work.replaces_source,
                     )
                 work.timings["context_ms"] = (time.perf_counter() - lookup_start) * 1000
+                # Hash the original request so different code fragments cannot
+                # share a cached translation. Only masked placeholders reach providers.
                 key = cache_key(self.settings.provider, self.settings.endpoint, request)
-                result = self.cache.get(key)
+                protected = protect_code(request.text)
+                provider_request = replace(request, text=protected.masked_text)
+                result = (
+                    TranslationResult(work.text)
+                    if protected.only_code
+                    else self.cache.get(key)
+                )
                 start = time.monotonic()
-                exact_term = self.context_engine.terminology.exact(work.text)
+                exact_term = (
+                    None if protected.only_code else self.context_engine.terminology.exact(work.text)
+                )
                 if result is None and exact_term is not None:
                     result = TranslationResult(exact_term)
                     self.counters["glossary_hits"] += 1
                 if result:
                     if result.cached:
                         self.counters["cache_hits"] += 1
-                    else:
+                    elif not protected.only_code:
                         self.cache.put(key, result)
                 else:
                     self.counters["translations"] += 1
                     try:
                         try:
-                            result = provider.translate(request)
+                            result = provider.translate(provider_request)
                         except ProviderRateLimitError as error:
                             # One bounded retry; wait is cancellable and stale work is discarded.
                             if self.cancel.wait(error.retry_after) or not self.session.current(
                                 work.stamp
                             ):
                                 continue
-                            result = provider.translate(request)
+                            result = provider.translate(provider_request)
+                        if not self.session.current(work.stamp):
+                            self.counters["stale"] += 1
+                            continue
+                        result = TranslationResult(
+                            protected.restore(result.text),
+                            result.input_tokens,
+                            result.output_tokens,
+                            result.cached,
+                        )
                     except Exception as error:
                         if not self.session.current(work.stamp):
                             self.counters["stale"] += 1

@@ -5,6 +5,8 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.graphics.Rect
+import org.json.JSONArray
 import android.net.Uri
 import android.provider.Settings
 import android.media.projection.MediaProjectionManager
@@ -42,6 +44,8 @@ import androidx.compose.ui.unit.dp
 import com.uniquecasper.desktranslate.capture.CaptureService
 import com.uniquecasper.desktranslate.learning.VocabularyEntry
 import com.uniquecasper.desktranslate.learning.VocabularyStore
+import com.uniquecasper.desktranslate.ocr.OcrTextBlock
+import com.uniquecasper.desktranslate.overlay.TranslatedRegion
 import com.uniquecasper.desktranslate.overlay.TranslationOverlay
 import com.uniquecasper.desktranslate.security.CredentialStore
 import com.uniquecasper.desktranslate.translation.ProviderClient
@@ -54,7 +58,9 @@ import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
     private val recognizedText = mutableStateOf("")
+    private val recognizedBlocks = mutableStateOf<List<OcrTextBlock>>(emptyList())
     private val statusText = mutableStateOf("Ready")
+    private val captureRunning = mutableStateOf(false)
     private var requestedScript = "Latin"
     private lateinit var translationOverlay: TranslationOverlay
     private var pendingOverlayText: String? = null
@@ -73,7 +79,14 @@ class MainActivity : ComponentActivity() {
                 putExtra(CaptureService.EXTRA_SCRIPT, requestedScript)
             }
             startForegroundService(service)
-            statusText.value = "Capture started. DeskTranslate is moving to the background; open the app or game you want to translate."
+            captureRunning.value = true
+            try {
+                translationOverlay.showFab()
+                statusText.value = "Capture started. Tap the floating DT control to hide or show in-place translations."
+            } catch (error: Exception) {
+                statusText.value = "Capture started, but floating control failed: " +
+                    (error.message ?: error.javaClass.simpleName)
+            }
             moveTaskToBack(true)
         } else {
             statusText.value = "Screen capture permission was declined."
@@ -85,7 +98,14 @@ class MainActivity : ComponentActivity() {
             when (intent?.action) {
                 CaptureService.ACTION_OCR_RESULT -> {
                     recognizedText.value = intent.getStringExtra(CaptureService.EXTRA_TEXT).orEmpty()
-                    statusText.value = "Text recognized locally."
+                    recognizedBlocks.value = decodeOcrBlocks(
+                        intent.getStringExtra(CaptureService.EXTRA_BLOCKS).orEmpty()
+                    )
+                    statusText.value = if (recognizedBlocks.value.isEmpty()) {
+                        "Text recognized, but no positioned OCR blocks were returned."
+                    } else {
+                        "Recognized ${recognizedBlocks.value.size} positioned text lines."
+                    }
                 }
                 CaptureService.ACTION_CAPTURE_STATUS -> {
                     statusText.value = intent.getStringExtra(CaptureService.EXTRA_TEXT).orEmpty()
@@ -114,13 +134,17 @@ class MainActivity : ComponentActivity() {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     DeskTranslateScreen(
                         recognizedText = recognizedText.value,
+                        recognizedBlocks = recognizedBlocks.value,
                         status = statusText.value,
                         onShowOverlay = { text -> showTranslationOverlay(text) },
+                        onShowBlocks = { blocks -> showTranslatedRegions(blocks) },
                         overlayPermissionGranted = overlayPermissionGranted.value,
                         onRequestOverlayPermission = { openOverlayPermissionSettings() },
                         onStartCapture = { script -> startCaptureWhenReady(script) },
                         onStopCapture = {
                             startService(Intent(this, CaptureService::class.java).setAction(CaptureService.ACTION_STOP))
+                            captureRunning.value = false
+                            translationOverlay.hide()
                             statusText.value = "Capture stopped."
                         }
                     )
@@ -165,6 +189,20 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun showTranslatedRegions(blocks: List<TranslatedRegion>) {
+        if (!Settings.canDrawOverlays(this)) {
+            statusText.value = "Translation is ready, but Android overlay permission is disabled."
+            return
+        }
+        try {
+            translationOverlay.showBlocks(blocks)
+            statusText.value = "Translated ${blocks.size} screen regions in place."
+        } catch (error: Exception) {
+            statusText.value = "Could not draw translated screen regions: " +
+                (error.message ?: error.javaClass.simpleName)
+        }
+    }
+
     private fun showTranslationOverlay(text: String) {
         if (!Settings.canDrawOverlays(this)) {
             pendingOverlayText = text
@@ -199,6 +237,14 @@ class MainActivity : ComponentActivity() {
         }
 
         val pending = pendingOverlayText
+        if (captureRunning.value && hasOverlayPermission) {
+            try {
+                translationOverlay.showFab()
+            } catch (error: Exception) {
+                statusText.value = "Floating control unavailable: " +
+                    (error.message ?: error.javaClass.simpleName)
+            }
+        }
         if (pending != null && hasOverlayPermission) {
             showTranslationOverlay(pending)
         }
@@ -214,12 +260,14 @@ class MainActivity : ComponentActivity() {
 @androidx.compose.runtime.Composable
 private fun DeskTranslateScreen(
     recognizedText: String,
+    recognizedBlocks: List<OcrTextBlock>,
     status: String,
     overlayPermissionGranted: Boolean,
     onRequestOverlayPermission: () -> Unit,
     onStartCapture: (String) -> Unit,
     onStopCapture: () -> Unit,
-    onShowOverlay: (String) -> Unit
+    onShowOverlay: (String) -> Unit,
+    onShowBlocks: (List<TranslatedRegion>) -> Unit
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -241,6 +289,7 @@ private fun DeskTranslateScreen(
     var credentialRevision by remember { mutableStateOf(0) }
     var lastAutoAttemptSignature by remember { mutableStateOf("") }
     var lastAutoTranslationAt by remember { mutableStateOf(0L) }
+    var latestOcrSignature by remember { mutableStateOf("") }
 
     val providerId = provider.trim().lowercase()
     val storedKey = remember(providerId, credentialRevision) {
@@ -293,8 +342,80 @@ private fun DeskTranslateScreen(
         }
     }
 
+    suspend fun translateOcrBlocks(
+        blocks: List<OcrTextBlock>,
+        requestSignature: String
+    ) {
+        val cleanBlocks = blocks.filter { it.text.isNotBlank() }.take(MAX_OCR_SEGMENTS)
+        if (cleanBlocks.isEmpty() || busy) return
+        val config = ProviderConfig(
+            provider = providerId,
+            endpoint = endpoint.trim(),
+            model = model.trim(),
+            apiKey = effectiveApiKey
+        )
+        busy = true
+        message = "Translating ${cleanBlocks.size} screen lines in one request…"
+        try {
+            val translated = withContext(Dispatchers.IO) {
+                ProviderClient.translateSegments(
+                    config,
+                    cleanBlocks.map { it.text },
+                    sourceLanguage,
+                    targetLanguage
+                )
+            }
+            if (latestOcrSignature != requestSignature) {
+                message = "A newer screen frame arrived; discarded the outdated translation."
+                return
+            }
+            val regions = cleanBlocks.mapIndexed { index, block ->
+                TranslatedRegion(
+                    id = block.id,
+                    sourceText = block.text,
+                    translatedText = translated[index],
+                    bounds = Rect(block.bounds),
+                    backgroundColor = block.backgroundColor,
+                    textColor = block.textColor,
+                    lineHeightPx = block.lineHeightPx
+                )
+            }
+            translation = translated.joinToString("\n")
+            sourceText = cleanBlocks.joinToString("\n") { it.text }
+            lastAutoTranslationAt = SystemClock.elapsedRealtime()
+            lastAutoAttemptSignature = requestSignature
+            message = "Translated ${regions.size} lines. Drawing translations over the original text…"
+            onShowBlocks(regions)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            message = "Screen translation failed: " +
+                (error.message ?: error.javaClass.simpleName)
+        } finally {
+            busy = false
+        }
+    }
+
+    val candidate = recognizedBlocks
+        .filter { it.text.isNotBlank() }
+        .take(MAX_OCR_SEGMENTS)
+        .joinToString("\n") { it.text }
+        .trim()
+        .take(12000)
+
+    LaunchedEffect(candidate) {
+        latestOcrSignature = candidate
+        if (candidate.isBlank()) return@LaunchedEffect
+        if (AutoTranslationPolicy.isDeskTranslateUi(candidate)) {
+            sourceText = ""
+            message = "DeskTranslate screen detected. Switch to the game or app you want to translate."
+            return@LaunchedEffect
+        }
+        sourceText = candidate
+    }
+
     LaunchedEffect(
-        recognizedText,
+        candidate,
         providerId,
         endpoint,
         model,
@@ -303,19 +424,8 @@ private fun DeskTranslateScreen(
         targetLanguage,
         busy
     ) {
-        val candidate = recognizedText.trim().take(12000)
-        if (candidate.isBlank()) return@LaunchedEffect
-
-        // MediaProjection initially captures DeskTranslate itself. Never send our
-        // settings screen or floating panel text to a translation provider.
-        if (AutoTranslationPolicy.isDeskTranslateUi(candidate)) {
-            sourceText = ""
-            message = "DeskTranslate screen detected. Switch to the game or app you want to translate."
-            return@LaunchedEffect
-        }
-
-        sourceText = candidate
-        val signature = listOf(
+        if (candidate.isBlank() || AutoTranslationPolicy.isDeskTranslateUi(candidate)) return@LaunchedEffect
+        val requestSignature = listOf(
             providerId,
             endpoint.trim(),
             model.trim(),
@@ -324,26 +434,23 @@ private fun DeskTranslateScreen(
             targetLanguage,
             candidate
         ).joinToString("\u0000")
-        if (signature == lastAutoAttemptSignature) return@LaunchedEffect
+        if (requestSignature == lastAutoAttemptSignature) return@LaunchedEffect
 
-        // OCR frames arrive frequently. A long debounce or a cooldown delay inside
-        // this keyed effect is cancelled by the next frame, so translations never run
-        // on animated screens. Debounce briefly, then skip (rather than wait through)
-        // the request throttle; the next changed OCR frame gets another chance.
+        // Key the debounce on stable OCR text, not per-frame IDs, so harmless geometry
+        // changes cannot continually cancel the timer on an animated screen.
         delay(OCR_STABILIZATION_DELAY_MS)
-        if (recognizedText.trim().take(12000) != candidate || busy) return@LaunchedEffect
+        if (latestOcrSignature != candidate || busy) return@LaunchedEffect
 
-        val elapsed = SystemClock.elapsedRealtime() - lastAutoTranslationAt
-        if (lastAutoTranslationAt > 0L && elapsed < AUTO_TRANSLATION_COOLDOWN_MS) {
-            message = "Screen text recognized. Waiting for the next translation interval."
-            return@LaunchedEffect
-        }
+        val remaining = AUTO_TRANSLATION_COOLDOWN_MS -
+            (SystemClock.elapsedRealtime() - lastAutoTranslationAt)
+        if (lastAutoTranslationAt > 0L && remaining > 0L) delay(remaining)
+        if (latestOcrSignature != candidate || busy) return@LaunchedEffect
 
-        lastAutoAttemptSignature = signature
-        lastAutoTranslationAt = SystemClock.elapsedRealtime()
-        scope.launch {
-            translateText(candidate, automatic = true)
-        }
+        val frameBlocks = recognizedBlocks
+            .filter { it.text.isNotBlank() }
+            .take(MAX_OCR_SEGMENTS)
+        if (frameBlocks.joinToString("\n") { it.text }.trim() != candidate) return@LaunchedEffect
+        scope.launch { translateOcrBlocks(frameBlocks, requestSignature) }
     }
 
     Column(
@@ -351,7 +458,7 @@ private fun DeskTranslateScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Text("DeskTranslate", style = MaterialTheme.typography.headlineMedium)
-        Text("Android companion · on-device OCR · automatic screen translation")
+        Text("Android companion · positioned OCR · in-place screen translation")
 
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -377,7 +484,7 @@ private fun DeskTranslateScreen(
                 OutlinedTextField(
                     value = script,
                     onValueChange = { script = it.take(20) },
-                    label = { Text("OCR script: Latin or Japanese") },
+                    label = { Text("OCR script: Latin, Japanese, Chinese, Korean or Auto") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true
                 )
@@ -385,7 +492,7 @@ private fun DeskTranslateScreen(
                     "After you approve capture, DeskTranslate moves to the background. " +
                         "Open the app or game you want to translate. OCR reads the whole visible screen."
                 )
-                Text("New stable OCR text is translated automatically. The floating panel updates after each successful translation.")
+                Text("A floating DT control appears after capture. New screen lines are translated together and drawn over their original positions. Tap DT to hide or show the translated text.")
             }
         }
 
@@ -559,3 +666,33 @@ private fun VocabularyRow(entry: VocabularyEntry, onDelete: () -> Unit) {
 
 private const val AUTO_TRANSLATION_COOLDOWN_MS = 2_500L
 private const val OCR_STABILIZATION_DELAY_MS = 350L
+private const val MAX_OCR_SEGMENTS = 60
+
+private fun decodeOcrBlocks(raw: String): List<OcrTextBlock> {
+    if (raw.isBlank()) return emptyList()
+    return try {
+        val array = JSONArray(raw)
+        (0 until array.length()).mapNotNull { index ->
+            val item = array.optJSONObject(index) ?: return@mapNotNull null
+            val text = item.optString("text").trim()
+            val bounds = Rect(
+                item.optInt("left"),
+                item.optInt("top"),
+                item.optInt("right"),
+                item.optInt("bottom")
+            )
+            if (text.isBlank() || bounds.isEmpty) return@mapNotNull null
+            OcrTextBlock(
+                id = item.optLong("id", index.toLong()),
+                text = text,
+                bounds = bounds,
+                confidence = item.optDouble("confidence", 0.7).toFloat(),
+                backgroundColor = item.optInt("backgroundColor", android.graphics.Color.DKGRAY),
+                textColor = item.optInt("textColor", android.graphics.Color.WHITE),
+                lineHeightPx = item.optInt("lineHeightPx", bounds.height()).coerceAtLeast(1)
+            )
+        }
+    } catch (_: Exception) {
+        emptyList()
+    }
+}

@@ -67,7 +67,11 @@ def _fenced_spans(text: str) -> list[tuple[int, int]]:
     for line in text.splitlines(keepends=True):
         stripped = line.lstrip()
         marker_char = (
-            _TICK if stripped.startswith(_TICK * 3) else "~" if stripped.startswith("~~~") else ""
+            _TICK
+            if stripped.startswith(_TICK * 3)
+            else "~"
+            if stripped.startswith("~~~")
+            else ""
         )
         if marker_char:
             marker_length = len(stripped) - len(stripped.lstrip(marker_char))
@@ -120,10 +124,8 @@ def protect_code(text: str) -> ProtectedText:
         line_end = offset + len(line)
         line_body = line.rstrip("\r\n")
         line_span = (offset, line_end)
-        if (
-            line_body.strip()
-            and not _overlaps(line_span, spans)
-            and any(pattern.search(line_body) for pattern in _LINE_PATTERNS)
+        if line_body.strip() and not _overlaps(line_span, spans) and any(
+            pattern.search(line_body) for pattern in _LINE_PATTERNS
         ):
             spans.append(line_span)
         offset = line_end

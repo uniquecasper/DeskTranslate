@@ -157,9 +157,9 @@ def test_code_is_masked_from_provider_and_restored_in_delivered_result():
             "previous_secret" not in pair.source + pair.translation
             for pair in request.context
         )
-        assert events[-1].result is not None
-        assert "const hidden = 42;\\n" in events[-1].result.text
-        assert "Bu değeri açıklayın:" in events[-1].result.text
+        translated_event = next(event for event in reversed(events) if event.result is not None)
+        assert "const hidden = 42;\\n" in translated_event.result.text
+        assert "Bu değeri açıklayın:" in translated_event.result.text
     finally:
         pipeline.stop()
         assert pipeline.wait_closed()

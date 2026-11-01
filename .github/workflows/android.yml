@@ -4,8 +4,6 @@ on:
   push:
     branches:
       - main
-      - feature/android-floating-translation-overlay
-      - claude/android-01
   pull_request:
     branches:
       - main

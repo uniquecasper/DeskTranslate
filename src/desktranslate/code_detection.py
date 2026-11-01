@@ -15,7 +15,7 @@ _TICK = chr(96)
 _LINE_PATTERNS = tuple(
     re.compile(pattern, re.IGNORECASE)
     for pattern in (
-        r"^\s*(?:def|class|function|func|const|let|var|return|import|from|using|namespace|public|private|static|async|await|package|select|insert|update|delete|create|alter|drop|with)\b",
+        r"^\s*(?:def|class|function|func|const|let|var|import|from|using|namespace|public|private|static|async|await|package|select|insert|update|delete|create|alter|drop|with)\b",
         r"^\s*(?:if|for|while|switch|catch)\s*\(",
         r"^\s*(?:#include|#!/|>>>|\$\s)",
         r"^\s*[{}\[\]]+;?\s*$",
@@ -147,5 +147,5 @@ def protect_code(text: str) -> ProtectedText:
     visible = masked
     for token in tokens:
         visible = visible.replace(token, "")
-    only_code = not any(character.isalpha() for character in visible)
+    only_code = not visible.strip()
     return ProtectedText(masked, fragments, tokens, only_code)

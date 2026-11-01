@@ -144,6 +144,7 @@ def test_code_is_masked_from_provider_and_restored_in_delivered_result():
     events = []
     pipeline.start()
     try:
+
         def delivered():
             events.extend(pipeline.poll())
             return any(event.result is not None for event in events)

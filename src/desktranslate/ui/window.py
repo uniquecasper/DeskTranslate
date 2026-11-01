@@ -6,7 +6,7 @@ import html
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 from PySide6.QtCore import QSize, Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import (
@@ -430,7 +430,10 @@ class MainWindow(QMainWindow):
         self.session_status.setMinimumWidth(0)
         self.session_status.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         self.statusBar().addPermanentWidget(self.session_status, 1)
-        self.result_source = label("Recognized text appears here.", "muted", selectable=True)
+        self.result_source = cast(
+            SelectableLabel,
+            label("Recognized text appears here.", "muted", selectable=True),
+        )
         self.result_source.setToolTip("Double-click a recognized word to look it up.")
         self.result_source.wordActivated.connect(self.lookup_word)
         self.result_translation = label("A little window into another language.", selectable=True)
@@ -826,9 +829,14 @@ class MainWindow(QMainWindow):
             return
 
         snapshot = copy.deepcopy(self.settings)
-        local_matches = []
+        local_matches: list[VocabularyEntry] = []
         try:
-            from desktranslate.vocabulary import MAX_ENTRIES, MAX_LIST_LIMIT, VocabularyStore
+            from desktranslate.vocabulary import (
+                MAX_ENTRIES,
+                MAX_LIST_LIMIT,
+                VocabularyEntry,
+                VocabularyStore,
+            )
 
             store = VocabularyStore(data_dir() / "vocabulary.sqlite3")
             offset = 0

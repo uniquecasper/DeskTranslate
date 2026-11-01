@@ -12,8 +12,8 @@ from typing import TypeVar
 from PIL import Image
 
 from desktranslate.algorithms import PRESETS, FrameGate, preprocess
-from desktranslate.context import ContextEngine, TranslationCache, TranslationContext, cache_key
 from desktranslate.code_detection import protect_code, remove_code
+from desktranslate.context import ContextEngine, TranslationCache, TranslationContext, cache_key
 from desktranslate.errors import (
     Cancelled,
     ConfigurationError,

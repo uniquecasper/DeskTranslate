@@ -151,7 +151,7 @@ class OcrEngine : AutoCloseable {
         private const val MIN_CONFIDENCE = 0.45f
         private const val EDGE_SAMPLE_MARGIN = 2
         private const val EDGE_SAMPLE_STEP = 4
-        private const val COLOR_QUANTIZE_MASK = -526345
+        private const val COLOR_QUANTIZE_MASK = -460552
         private const val DEFAULT_BACKGROUND = 0xFF202124.toInt()
     }
 }

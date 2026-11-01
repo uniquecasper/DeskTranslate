@@ -554,6 +554,7 @@ def test_suppressed_result_only_opens_main_for_explicit_one_shot(window, monkeyp
         assert window.result_translation.text() == "Authored result"
         assert ("overlay cannot fit" in window.status_label.text()) is (not once)
 
+
 def test_double_clicking_a_recognized_word_emits_the_selected_word(window):
     from PySide6.QtCore import QPoint, Qt
     from PySide6.QtGui import QFontMetrics
@@ -577,6 +578,7 @@ def test_double_clicking_a_recognized_word_emits_the_selected_word(window):
     QApplication.processEvents()
 
     assert activated == [word]
+
 
 def test_dictionary_dialog_shows_meaning_definition_example_and_attribution(
     window, monkeypatch

@@ -840,9 +840,7 @@ class MainWindow(QMainWindow):
                     target_language=snapshot.target,
                 )
                 local_matches.extend(
-                    entry
-                    for entry in page
-                    if entry.source.casefold() == word.casefold()
+                    entry for entry in page if entry.source.casefold() == word.casefold()
                 )
                 offset += len(page)
                 if len(page) < MAX_LIST_LIMIT:
@@ -863,7 +861,9 @@ class MainWindow(QMainWindow):
             return
 
         if self.jobs.busy:
-            self.notice("A setup task is already running. Try the word lookup again when it finishes.")
+            self.notice(
+                "A setup task is already running. Try the word lookup again when it finishes."
+            )
             return
         if SPECS[snapshot.provider].capabilities.context and not snapshot.model:
             self.notice("Choose a model in Providers before looking up a word.")
@@ -908,7 +908,9 @@ class MainWindow(QMainWindow):
             if self.closing:
                 return
             if self.settings_revision != revision:
-                self.notice("Settings changed during lookup. Double-click the word again to use the new language pair.")
+                self.notice(
+                    "Settings changed during lookup. Double-click the word again to use the new language pair."
+                )
                 return
             if error:
                 self.notice(error)
@@ -925,9 +927,7 @@ class MainWindow(QMainWindow):
         dialog = QMessageBox(self)
         dialog.setWindowTitle("Word dictionary")
         dialog.setIcon(QMessageBox.Icon.Information)
-        dialog.setText(
-            f"{word}\n\n{translation}\n\n{source_language} → {target_language}"
-        )
+        dialog.setText(f"{word}\n\n{translation}\n\n{source_language} → {target_language}")
         save_button = dialog.addButton("Save to Learning", QMessageBox.ButtonRole.AcceptRole)
         dialog.addButton(QMessageBox.StandardButton.Close)
         dialog.exec()

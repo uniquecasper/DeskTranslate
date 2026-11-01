@@ -161,6 +161,7 @@ def test_malformed_existing_review_table_is_rejected_without_repair(tmp_path):
 
     assert path.read_bytes() == before
 
+
 def test_review_connection_enables_secure_delete_and_delete_is_atomic(stores):
     vocabulary, review = stores
     entry = vocabulary.add("erase", "sil", "en", "tr")

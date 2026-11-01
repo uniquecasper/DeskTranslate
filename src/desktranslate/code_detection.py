@@ -15,13 +15,17 @@ _TICK = chr(96)
 _LINE_PATTERNS = tuple(
     re.compile(pattern, re.IGNORECASE)
     for pattern in (
-        r"^\s*(?:def|class|function|func|const|let|var|import|from|using|namespace|public|private|static|async|await|package|select|insert|update|delete|create|alter|drop|with)\b",
-        r"^\s*(?:if|for|while|switch|catch)\s*\(",
-        r"^\s*(?:#include|#!/|>>>|\$\s)",
-        r"^\s*[{}\[\]]+;?\s*$",
-        r"^\s*[A-Za-z_$][\w$.[\]]*\s*(?:=|:=|=>)\s*\S",
-        r"^\s*(?:console\.log|print|System\.out\.print|printf)\s*\(",
-        r"^\s*(?:[A-Za-z]:\\|/)[\w.\-/\\]+$",
+        r"^\\s*(?:def|class|function|func)\\s+[A-Za-z_$][\\w$]*",
+        r"^\\s*(?:const|let|var)\\s+[A-Za-z_$][\\w$]*\\s*(?::[^=]+)?=",
+        r"^\\s*(?:import|from)\\s+[\\w.*]+",
+        r"^\\s*(?:using|namespace|package)\\s+[\\w.]+;?\\s*$",
+        r"^\\s*(?:if|for|while|switch|catch)\\s*\\(",
+        r"^\\s*(?:#include|#!/|>>>|\\$\\s)",
+        r"^\\s*[{}\\[\\]]+;?\\s*$",
+        r"^\\s*[A-Za-z_$][\\w$.[\\]]*\\s*(?:=|:=|=>)\\s*\\S",
+        r"^\\s*(?:console\\.log|print|System\\.out\\.print|printf)\\s*\\(",
+        r"^\\s*(?:SELECT\\s+.+\\s+FROM|INSERT\\s+INTO|UPDATE\\s+.+\\s+SET|DELETE\\s+FROM|CREATE\\s+(?:TABLE|INDEX|VIEW)|ALTER\\s+TABLE|DROP\\s+TABLE)\\b",
+        r"^\\s*(?:[A-Za-z]:\\\\|/)[\\w.\\-/\\\\]+$",
     )
 )
 

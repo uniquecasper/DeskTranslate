@@ -53,7 +53,7 @@ from desktranslate.dictionary import (
 )
 from desktranslate.errors import DeskTranslateError
 from desktranslate.hotkeys import Hotkeys, validate_hotkeys
-from desktranslate.languages import LANGUAGES, source_languages
+from desktranslate.languages import LANGUAGES, REGISTRY, source_languages
 from desktranslate.metrics import LatencyMetrics
 from desktranslate.models import PipelineEvent, Rect, SessionState, Stamp, TranslationRequest
 from desktranslate.ocr import IsolatedOCR, ModelManager
@@ -979,9 +979,9 @@ class MainWindow(QMainWindow):
         """Show the meaning, English definition and example with source attribution."""
         sections = [word]
         if translation:
-            sections.append(f"Meaning ({target_language}):\n{translation}")
+            target_name = REGISTRY[target_language].name\n            sections.append(f"Meaning ({target_name}):\\n{translation}")
         else:
-            sections.append(f"Meaning ({target_language}): unavailable")
+            target_name = REGISTRY[target_language].name\n            sections.append(f"Meaning ({target_name}): unavailable")
 
         if dictionary_entry is not None:
             sections.append("English explanation and example:")

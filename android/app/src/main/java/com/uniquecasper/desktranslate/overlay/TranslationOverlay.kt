@@ -6,13 +6,15 @@ import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
 import android.provider.Settings
 import android.view.Gravity
+import android.view.MotionEvent
+import android.view.View
 import android.view.WindowManager
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 
 /**
- * A small, dismissible system overlay for the reviewed translation.
+ * A touch-interactive, movable system overlay for the reviewed translation.
  *
  * The user must explicitly grant Android's "Display over other apps" permission.
  * The overlay only displays text supplied by the user-triggered translation flow.
@@ -45,11 +47,15 @@ class TranslationOverlay(context: Context) {
                 setStroke(dp(1), Color.argb(110, 185, 196, 220))
             }
             elevation = dp(12).toFloat()
+            // Consume touches inside the panel instead of passing them to the app below.
+            isClickable = true
+            isFocusable = true
         }
 
         val header = LinearLayout(appContext).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
+            contentDescription = "Hold and drag to move translation panel"
         }
 
         val title = TextView(appContext).apply {
@@ -57,19 +63,26 @@ class TranslationOverlay(context: Context) {
             setTextColor(Color.WHITE)
             textSize = 14f
             setTypeface(typeface, android.graphics.Typeface.BOLD)
+            gravity = Gravity.CENTER_VERTICAL
+            minHeight = dp(48)
         }
         val close = TextView(appContext).apply {
-            text = "Close"
-            setTextColor(Color.rgb(190, 205, 255))
-            textSize = 13f
-            setPadding(dp(12), dp(8), 0, dp(8))
+            text = "✕  Close"
+            setTextColor(Color.rgb(220, 228, 255))
+            textSize = 14f
+            gravity = Gravity.CENTER
+            minWidth = dp(76)
+            minHeight = dp(48)
+            isClickable = true
+            isFocusable = true
+            setBackgroundResource(android.R.drawable.list_selector_background)
             setOnClickListener { hide() }
             contentDescription = "Close translation overlay"
         }
-        header.addView(title, LinearLayout.LayoutParams(0, dp(40), 1f))
+        header.addView(title, LinearLayout.LayoutParams(0, dp(48), 1f))
         header.addView(close, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.WRAP_CONTENT,
-            dp(40)
+            dp(48)
         ))
 
         val body = TextView(appContext).apply {
@@ -78,9 +91,11 @@ class TranslationOverlay(context: Context) {
             textSize = 16f
             setLineSpacing(dp(3).toFloat(), 1f)
             setTextIsSelectable(true)
+            contentDescription = "Translated text"
         }
         val scroll = ScrollView(appContext).apply {
             isFillViewport = true
+            isClickable = true
             addView(body, android.widget.FrameLayout.LayoutParams(
                 android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
                 android.widget.FrameLayout.LayoutParams.WRAP_CONTENT
@@ -98,16 +113,47 @@ class TranslationOverlay(context: Context) {
 
         val screenWidth = appContext.resources.displayMetrics.widthPixels
         val params = WindowManager.LayoutParams(
-            (screenWidth - dp(24)).coerceAtLeast(dp(240)),
+            (screenWidth - dp(24)).coerceAtLeast(dp(200)),
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+            // Keep the window touch/focus capable. Only touches outside the panel pass through.
+            WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
             y = dp(72)
+            softInputMode = WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN
+        }
+
+        // Dragging the title area lets the user move the panel out of the way.
+        var startWindowX = 0
+        var startWindowY = 0
+        var startTouchX = 0f
+        var startTouchY = 0f
+        header.setOnTouchListener { _, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    startWindowX = params.x
+                    startWindowY = params.y
+                    startTouchX = event.rawX
+                    startTouchY = event.rawY
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    params.x = startWindowX + (event.rawX - startTouchX).toInt()
+                    params.y = (startWindowY + (event.rawY - startTouchY).toInt())
+                        .coerceAtLeast(0)
+                    try {
+                        windowManager.updateViewLayout(card, params)
+                    } catch (_: IllegalArgumentException) {
+                        // The system may detach the overlay while it is being dragged.
+                    }
+                    true
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> true
+                else -> false
+            }
         }
 
         windowManager.addView(card, params)

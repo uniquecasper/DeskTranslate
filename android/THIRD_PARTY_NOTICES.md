@@ -1,11 +1,13 @@
 # Android third-party reference notices
 
-DeskTranslate's Android implementation was informed by the following public projects:
+DeskTranslate's Android implementation was informed by the following public projects. The current implementation reuses their documented architecture and independently written equivalents; no source files from these three repositories have been copied into DeskTranslate.
 
-- [MangaLens](https://github.com/avadhesh1017/MangaLens) — MIT License, copyright (c) 2026 Avadhesh. Its screen-translation overlay and capture flow were reviewed as implementation references.
-- [ALSTMobile](https://github.com/navidseyedain/ALSTMobile) — MIT License, copyright (c) 2026 Navid Seyedain. Its MediaProjection, ML Kit recognition and system-overlay lifecycle were reviewed as implementation references.
+- [MangaLens](https://github.com/avadhesh1017/MangaLens) — MIT License, copyright (c) 2026 Avadhesh. Its screen-translation capture and overlay concepts were reviewed as implementation references.
+- [ALSTMobile](https://github.com/navidseyedain/ALSTMobile) — MIT License, copyright (c) 2026 Navid Seyedain. Its MediaProjection flow, OCR bounding-box model, draggable floating control and coordinate-aligned overlay lifecycle were reviewed as implementation references.
+- [TextGrab](https://github.com/AhmetCanArslan/TextGrab) — MIT License. Its word/line OCR structure, confidence-aware recognition, selectable text model and translation-engine separation were reviewed as implementation references.
+- [AidanPark/screen-translator](https://github.com/AidanPark/screen-translator) — the Apache-2.0-licensed source at commit `8717cf0` (2026-09-23) was consulted for area-crop and stable translation-target design. No source code from that repository was copied. Later revisions use PolyForm Noncommercial 1.0.0; those revisions are not used as a source-code dependency.
 
-The MIT license notices for these projects are reproduced below.
+The MIT license notices for MangaLens and ALSTMobile are reproduced below because their detailed implementation patterns are referenced in this application.
 
 ## MangaLens — MIT License
 
@@ -50,10 +52,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
-## AidanPark/screen-translator
-
-This project is licensed under PolyForm Noncommercial License 1.0.0. Its source
-code is not copied into DeskTranslate. It was consulted only for high-level
-technical research; its non-commercial restrictions are not imposed on this
-project by code reuse.

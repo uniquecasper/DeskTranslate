@@ -31,7 +31,7 @@ GitHub Actions runs the same checks and uploads the debug APK as a workflow arti
 - minSdk 26; compileSdk/targetSdk 36.
 - Screen capture requires explicit Android system approval for each session.
 - The app shows an ongoing foreground-service notification while capturing.
-- OCR is on-device. The current capture implementation recognizes the full captured display; region selection and a floating translation overlay are not implemented yet.
+- OCR is on-device and currently recognizes the full captured display. Region selection and per-text-box translation placement remain future work.
 - Translation is online unless a user configures an on-device/loopback provider. Offline OCR does not mean offline translation.
 - The current Android provider adapters are OpenAI, Ollama, Anthropic and Gemini. DeepL, Google quick translation, LibreTranslate, OpenRouter, LM Studio and arbitrary OpenAI-compatible endpoint configuration still require implementation/verification.
 - Showing a completed translation in a scrollable system overlay is supported after the user grants Android's Display over other apps permission.

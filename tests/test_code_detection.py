@@ -73,6 +73,7 @@ def test_changed_code_markers_are_rejected(damage: str):
     with pytest.raises(TranslationError):
         protected.restore(result)
 
+
 def test_non_latin_prose_surrounding_code_is_not_treated_as_code_only():
     code = "const total = 3;"
     source = f"このコードを説明してください。\n{code}\n結果を確認します。"

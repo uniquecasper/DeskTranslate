@@ -160,3 +160,37 @@ def test_malformed_existing_review_table_is_rejected_without_repair(tmp_path):
         VocabularyReviewStore(path)
 
     assert path.read_bytes() == before
+
+def test_review_connection_enables_secure_delete_and_delete_is_atomic(stores):
+    vocabulary, review = stores
+    entry = vocabulary.add("erase", "sil", "en", "tr")
+    initial = review.review(entry.id, "good")
+
+    connection = review._connect()
+    try:
+        assert connection.execute("PRAGMA secure_delete").fetchone()[0] == 1
+        connection.close()
+    finally:
+        connection.close()
+
+    # A failed review-state deletion must roll back the vocabulary deletion too.
+    blocker = sqlite3.connect(vocabulary.path)
+    try:
+        blocker.execute(
+            """
+            CREATE TRIGGER block_review_state_delete
+            BEFORE DELETE ON vocabulary_review_state
+            BEGIN
+                SELECT RAISE(ABORT, 'blocked review-state delete');
+            END
+            """
+        )
+        blocker.commit()
+    finally:
+        blocker.close()
+
+    with pytest.raises(VocabularyReviewError):
+        review.delete_entry(entry.id)
+
+    assert vocabulary.get(entry.id) == entry
+    assert review.state(entry.id) == initial

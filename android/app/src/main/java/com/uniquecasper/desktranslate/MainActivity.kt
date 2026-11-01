@@ -46,6 +46,7 @@ import com.uniquecasper.desktranslate.overlay.TranslationOverlay
 import com.uniquecasper.desktranslate.security.CredentialStore
 import com.uniquecasper.desktranslate.translation.ProviderClient
 import com.uniquecasper.desktranslate.translation.ProviderConfig
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -238,8 +239,11 @@ private fun DeskTranslateScreen(
                 ProviderClient.translate(config, text, sourceLanguage, targetLanguage)
             }
             translation = result
-            message = "Translation completed. Updating floating panel…"
+            if (automatic) lastAutoTranslationAt = SystemClock.elapsedRealtime()
+            message = "Translation completed. Opening floating panel…"
             onShowOverlay(result)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (error: Exception) {
             message = "Translation failed: " + (error.message ?: error.javaClass.simpleName)
         } finally {
@@ -254,10 +258,19 @@ private fun DeskTranslateScreen(
         model,
         effectiveApiKey,
         sourceLanguage,
-        targetLanguage
+        targetLanguage,
+        busy
     ) {
         val candidate = recognizedText.trim().take(12000)
         if (candidate.isBlank()) return@LaunchedEffect
+
+        // MediaProjection initially captures DeskTranslate itself. Never send our
+        // settings screen or floating panel text to a translation provider.
+        if (AutoTranslationPolicy.isDeskTranslateUi(candidate)) {
+            sourceText = ""
+            message = "DeskTranslate screen detected. Switch to the game or app you want to translate."
+            return@LaunchedEffect
+        }
 
         sourceText = candidate
         val signature = listOf(
@@ -271,21 +284,21 @@ private fun DeskTranslateScreen(
         ).joinToString("\u0000")
         if (signature == lastAutoAttemptSignature) return@LaunchedEffect
 
-        // Wait briefly for OCR text to settle. A cooldown prevents animated screens
-        // and frequently changing status bars from generating a request every frame.
-        delay(800)
+        // Let OCR settle, then wait out the cooldown without tying the network call
+        // to this effect. OCR updates can cancel this effect, but must not cancel a
+        // request already in progress.
+        delay(1200)
         if (recognizedText.trim().take(12000) != candidate) return@LaunchedEffect
-        while (busy) delay(150)
 
-        val now = SystemClock.elapsedRealtime()
-        if (now - lastAutoTranslationAt < AUTO_TRANSLATION_COOLDOWN_MS) {
-            lastAutoAttemptSignature = signature
-            return@LaunchedEffect
-        }
+        val elapsed = SystemClock.elapsedRealtime() - lastAutoTranslationAt
+        val remaining = AUTO_TRANSLATION_COOLDOWN_MS - elapsed
+        if (remaining > 0) delay(remaining)
+        if (recognizedText.trim().take(12000) != candidate || busy) return@LaunchedEffect
 
         lastAutoAttemptSignature = signature
-        lastAutoTranslationAt = now
-        translateText(candidate, automatic = true)
+        scope.launch {
+            translateText(candidate, automatic = true)
+        }
     }
 
     Column(

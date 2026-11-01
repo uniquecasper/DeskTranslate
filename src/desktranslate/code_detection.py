@@ -20,6 +20,7 @@ _LINE_PATTERNS = tuple(
         r"^\\s*(?:const|let|var)\\s+[A-Za-z_$][\\w$]*\\s*(?::[^=]+)?=",
         r"^\\s*(?:import|from)\\s+[\\w.*]+",
         r"^\\s*(?:using|namespace|package)\\s+[\\w.]+;?\\s*$",
+        r"^\\s*return\\s+[A-Za-z_$][\\w$]*\\s*(?:[;(]|$)",
         r"^\\s*(?:if|for|while|switch|catch)\\s*\\(",
         r"^\\s*(?:#include|#!/|>>>|\\$\\s)",
         r"^\\s*[{}\\[\\]]+;?\\s*$",

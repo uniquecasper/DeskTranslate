@@ -5,11 +5,12 @@ on:
     paths:
       - ".github/workflows/release.yml"
       - "src/desktranslate/__init__.py"
+      - "README.md"
 permissions:
   contents: write
 concurrency:
   group: desktranslate-2-1-0-release
-  cancel-in-progress: false
+  cancel-in-progress: true
 jobs:
   release:
     permissions:

@@ -81,9 +81,9 @@ class TranslationOverlay(context: Context) {
         }
         val scroll = ScrollView(appContext).apply {
             isFillViewport = true
-            addView(body, ScrollView.LayoutParams(
-                ScrollView.LayoutParams.MATCH_PARENT,
-                ScrollView.LayoutParams.WRAP_CONTENT
+            addView(body, android.widget.FrameLayout.LayoutParams(
+                android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+                android.widget.FrameLayout.LayoutParams.WRAP_CONTENT
             ))
         }
 

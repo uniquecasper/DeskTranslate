@@ -93,6 +93,9 @@ class VocabularyReviewStore:
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.path, timeout=self.timeout, isolation_level=None)
         connection.row_factory = sqlite3.Row
+        # Deleting vocabulary through this shared database connection must retain
+        # the same secure-delete guarantee as VocabularyStore.delete().
+        connection.execute("PRAGMA secure_delete = ON")
         return connection
 
     @contextmanager

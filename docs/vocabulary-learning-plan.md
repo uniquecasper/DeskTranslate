@@ -1,6 +1,6 @@
 # Vocabulary Learning — Implementation and Verification
 
-Status: implemented on `main`, with spaced-repetition review added on a follow-up branch. The local vocabulary store, read-only contextual lookup and Learning page support explicit saving, language-pair filtering, bounded search/paging, confirmed deletion and a local review queue.
+Status: the base vocabulary store, read-only contextual lookup and Learning page are already on `main`. Spaced-repetition review is staged on `feature/desktranslate-2-1-srs`; it is not shipped until the branch passes Windows CI, review and the normal release qualification.
 
 ## User workflow
 

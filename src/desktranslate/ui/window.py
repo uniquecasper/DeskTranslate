@@ -849,9 +849,9 @@ class MainWindow(QMainWindow):
             QMessageBox.information(
                 self,
                 "Saved word",
-                f"{word}  ·  {snapshot.source} → {snapshot.target}\\n\\n"
-                + "\\n".join(translations[:8])
-                + "\\n\\nFound in your local Learning vocabulary.",
+                f"{word}  ·  {snapshot.source} → {snapshot.target}\n\n"
+                + "\n".join(translations[:8])
+                + "\n\nFound in your local Learning vocabulary.",
             )
             return
 
@@ -919,7 +919,7 @@ class MainWindow(QMainWindow):
         dialog.setWindowTitle("Word dictionary")
         dialog.setIcon(QMessageBox.Icon.Information)
         dialog.setText(
-            f"{word}\\n\\n{translation}\\n\\n{source_language} → {target_language}"
+            f"{word}\n\n{translation}\n\n{source_language} → {target_language}"
         )
         save_button = dialog.addButton("Save to Learning", QMessageBox.ButtonRole.AcceptRole)
         dialog.addButton(QMessageBox.StandardButton.Close)

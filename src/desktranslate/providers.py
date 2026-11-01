@@ -116,6 +116,13 @@ def prompts(request: TranslationRequest) -> tuple[str, str]:
         "Use the glossary's preferred names and terms where they fit the source. "
         + styles[request.style]
     )
+    if "DTXQZ_LOCK_" in request.text:
+        system += (
+            " Some text segments are represented by opaque DTXQZ_LOCK_ placeholders. "
+            "Copy every placeholder exactly once, unchanged and in its original order. "
+            "Do not translate, edit, split, duplicate or add punctuation inside a placeholder. "
+            "The placeholders stand for source code that must be restored byte-for-byte."
+        )
     payload = {
         "previous_lines": [
             {"source": p.source, "translation": p.translation} for p in request.context

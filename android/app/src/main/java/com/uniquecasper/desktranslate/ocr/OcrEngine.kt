@@ -34,10 +34,21 @@ data class OcrTextBlock(
 )
 
 class OcrEngine : AutoCloseable {
-    private val latin = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
-    private val japanese = TextRecognition.getClient(JapaneseTextRecognizerOptions.Builder().build())
-    private val chinese = TextRecognition.getClient(ChineseTextRecognizerOptions.Builder().build())
-    private val korean = TextRecognition.getClient(KoreanTextRecognizerOptions.Builder().build())
+    // Keep only recognizers actually requested by the user in memory.
+    private val latinDelegate = lazy { TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS) }
+    private val japaneseDelegate = lazy {
+        TextRecognition.getClient(JapaneseTextRecognizerOptions.Builder().build())
+    }
+    private val chineseDelegate = lazy {
+        TextRecognition.getClient(ChineseTextRecognizerOptions.Builder().build())
+    }
+    private val koreanDelegate = lazy {
+        TextRecognition.getClient(KoreanTextRecognizerOptions.Builder().build())
+    }
+    private val latin by latinDelegate
+    private val japanese by japaneseDelegate
+    private val chinese by chineseDelegate
+    private val korean by koreanDelegate
     private val ids = AtomicLong(System.currentTimeMillis() shl 12)
 
     fun recognize(bitmap: Bitmap, script: String): List<OcrTextBlock> {
@@ -137,10 +148,10 @@ class OcrEngine : AutoCloseable {
     }
 
     override fun close() {
-        latin.close()
-        japanese.close()
-        chinese.close()
-        korean.close()
+        if (latinDelegate.isInitialized()) latin.close()
+        if (japaneseDelegate.isInitialized()) japanese.close()
+        if (chineseDelegate.isInitialized()) chinese.close()
+        if (koreanDelegate.isInitialized()) korean.close()
     }
 
     private data class RawLine(val text: String, val bounds: Rect, val confidence: Float)

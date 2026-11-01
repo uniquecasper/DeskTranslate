@@ -69,9 +69,7 @@ def test_lookup_encodes_the_selected_word_and_returns_none_for_404(monkeypatch):
     monkeypatch.setattr("desktranslate.dictionary.httpx.get", fake_get)
 
     assert lookup_english_word("mother-in-law") is None
-    assert calls == [
-        "https://api.dictionaryapi.dev/api/v2/entries/en/mother-in-law"
-    ]
+    assert calls == ["https://api.dictionaryapi.dev/api/v2/entries/en/mother-in-law"]
 
 
 @pytest.mark.parametrize("word", ["", "two words", "hello!", "x" * 101, "hello/../world"])
@@ -107,9 +105,7 @@ def test_lookup_rejects_http_errors_and_oversized_or_invalid_responses(monkeypat
 
     monkeypatch.setattr(
         "desktranslate.dictionary.httpx.get",
-        lambda *_args, **_kwargs: httpx.Response(
-            200, content=b"x" * (512 * 1024 + 1)
-        ),
+        lambda *_args, **_kwargs: httpx.Response(200, content=b"x" * (512 * 1024 + 1)),
     )
     with pytest.raises(DictionaryLookupError, match="size limit"):
         lookup_english_word("hello")

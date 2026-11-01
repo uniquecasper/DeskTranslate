@@ -979,9 +979,11 @@ class MainWindow(QMainWindow):
         """Show the meaning, English definition and example with source attribution."""
         sections = [word]
         if translation:
-            target_name = REGISTRY[target_language].name\n            sections.append(f"Meaning ({target_name}):\\n{translation}")
+            target_name = REGISTRY[target_language].name
+            sections.append(f"Meaning ({target_name}):\n{translation}")
         else:
-            target_name = REGISTRY[target_language].name\n            sections.append(f"Meaning ({target_name}): unavailable")
+            target_name = REGISTRY[target_language].name
+            sections.append(f"Meaning ({target_name}): unavailable")
 
         if dictionary_entry is not None:
             sections.append("English explanation and example:")

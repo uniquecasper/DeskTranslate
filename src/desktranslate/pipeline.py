@@ -30,6 +30,7 @@ from desktranslate.models import (
     SessionState,
     Stamp,
     TranslationProvider,
+    TranslationRequest,
     TranslationResult,
 )
 from desktranslate.settings import Settings
@@ -735,16 +736,20 @@ class Pipeline:
                 else:
                     self.counters["translations"] += 1
                     try:
-                        def translate_part(part_request: TranslationRequest) -> TranslationResult:
+                        def translate_part(
+                            part_request: TranslationRequest,
+                            active_provider: TranslationProvider = provider,
+                            work_stamp: Stamp = work.stamp,
+                        ) -> TranslationResult:
                             try:
-                                return provider.translate(part_request)
+                                return active_provider.translate(part_request)
                             except ProviderRateLimitError as error:
                                 # One bounded retry per provider request; never retry stale work.
                                 if self.cancel.wait(error.retry_after) or not self.session.current(
-                                    work.stamp
+                                    work_stamp
                                 ):
-                                    raise Cancelled()
-                                return provider.translate(part_request)
+                                    raise Cancelled() from error
+                                return active_provider.translate(part_request)
 
                         if protected.fragments and not provider.capabilities.context:
                             # Plain translation APIs cannot follow marker instructions reliably.

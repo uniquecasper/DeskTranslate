@@ -735,24 +735,77 @@ class Pipeline:
                 else:
                     self.counters["translations"] += 1
                     try:
-                        try:
-                            result = provider.translate(provider_request)
-                        except ProviderRateLimitError as error:
-                            # One bounded retry; wait is cancellable and stale work is discarded.
-                            if self.cancel.wait(error.retry_after) or not self.session.current(
-                                work.stamp
-                            ):
+                        def translate_part(part_request: TranslationRequest) -> TranslationResult:
+                            try:
+                                return provider.translate(part_request)
+                            except ProviderRateLimitError as error:
+                                # One bounded retry per provider request; never retry stale work.
+                                if self.cancel.wait(error.retry_after) or not self.session.current(
+                                    work.stamp
+                                ):
+                                    raise Cancelled()
+                                return provider.translate(part_request)
+
+                        if protected.fragments and not provider.capabilities.context:
+                            # Plain translation APIs cannot follow marker instructions reliably.
+                            # Send only prose slices; code and surrounding whitespace stay local.
+                            translated_parts: list[str] = []
+                            input_tokens = 0
+                            output_tokens = 0
+                            cursor = 0
+                            for token in protected.tokens:
+                                token_at = provider_request.text.index(token, cursor)
+                                segment = provider_request.text[cursor:token_at]
+                                leading = segment[: len(segment) - len(segment.lstrip())]
+                                trailing = segment[len(segment.rstrip()) :]
+                                middle_end = len(segment) - len(trailing) if trailing else len(segment)
+                                middle = segment[len(leading):middle_end]
+                                if middle:
+                                    part_result = translate_part(
+                                        replace(provider_request, text=middle, context=())
+                                    )
+                                    translated_parts.extend((leading, part_result.text, trailing))
+                                    input_tokens += part_result.input_tokens
+                                    output_tokens += part_result.output_tokens
+                                else:
+                                    translated_parts.append(segment)
+                                translated_parts.append(token)
+                                cursor = token_at + len(token)
+
+                            tail = provider_request.text[cursor:]
+                            leading = tail[: len(tail) - len(tail.lstrip())]
+                            trailing = tail[len(tail.rstrip()) :]
+                            tail_end = len(tail) - len(trailing) if trailing else len(tail)
+                            middle = tail[len(leading):tail_end]
+                            if middle:
+                                part_result = translate_part(
+                                    replace(provider_request, text=middle, context=())
+                                )
+                                translated_parts.extend((leading, part_result.text, trailing))
+                                input_tokens += part_result.input_tokens
+                                output_tokens += part_result.output_tokens
+                            else:
+                                translated_parts.append(tail)
+
+                            result = TranslationResult(
+                                protected.restore("".join(translated_parts)),
+                                input_tokens,
+                                output_tokens,
+                            )
+                        else:
+                            result = translate_part(provider_request)
+                            if not self.session.current(work.stamp):
+                                self.counters["stale"] += 1
                                 continue
-                            result = provider.translate(provider_request)
+                            result = TranslationResult(
+                                protected.restore(result.text),
+                                result.input_tokens,
+                                result.output_tokens,
+                                result.cached,
+                            )
                         if not self.session.current(work.stamp):
                             self.counters["stale"] += 1
                             continue
-                        result = TranslationResult(
-                            protected.restore(result.text),
-                            result.input_tokens,
-                            result.output_tokens,
-                            result.cached,
-                        )
                     except Exception as error:
                         if not self.session.current(work.stamp):
                             self.counters["stale"] += 1

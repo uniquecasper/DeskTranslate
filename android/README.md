@@ -34,7 +34,9 @@ GitHub Actions runs the same checks and uploads the debug APK as a workflow arti
 - OCR is on-device. The current capture implementation recognizes the full captured display; region selection and a floating translation overlay are not implemented yet.
 - Translation is online unless a user configures an on-device/loopback provider. Offline OCR does not mean offline translation.
 - The current Android provider adapters are OpenAI, Ollama, Anthropic and Gemini. DeepL, Google quick translation, LibreTranslate, OpenRouter, LM Studio and arbitrary OpenAI-compatible endpoint configuration still require implementation/verification.
-- Device-specific MediaProjection behavior and performance still require physical-device qualification, including Android 14+ and Android 16.
+- Showing a completed translation in a scrollable system overlay is supported after the user grants Android's Display over other apps permission.
+- The overlay currently displays the translated result in a floating panel; translation is not yet mapped back onto each original OCR text rectangle.
+- Device-specific MediaProjection and overlay behavior still require physical-device qualification, including Android 14+ and Android 16.
 
 ## Privacy
 

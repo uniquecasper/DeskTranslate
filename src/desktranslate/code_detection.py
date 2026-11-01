@@ -154,3 +154,12 @@ def protect_code(text: str) -> ProtectedText:
         visible = visible.replace(token, "")
     only_code = not visible.strip()
     return ProtectedText(masked, fragments, tokens, only_code)
+
+
+def remove_code(text: str) -> str:
+    """Return only non-code text for contextual reference sent to a provider."""
+    protected = protect_code(text)
+    visible = protected.masked_text
+    for token in protected.tokens:
+        visible = visible.replace(token, "")
+    return visible

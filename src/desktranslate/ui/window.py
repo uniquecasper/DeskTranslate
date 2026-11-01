@@ -8,7 +8,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from PySide6.QtCore import QSize, Qt, QTimer, QUrl
+from PySide6.QtCore import QSize, Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import QAction, QCloseEvent, QDesktopServices, QFocusEvent, QResizeEvent
 from PySide6.QtWidgets import (
     QApplication,
@@ -68,6 +68,8 @@ from desktranslate.window_capture import (
 class SelectableLabel(QLabel):
     """A word-selectable result label that retains selection until its text changes."""
 
+    wordActivated = Signal(str)
+
     def __init__(self, text: str, parent: QWidget | None = None) -> None:
         super().__init__(text, parent)
         self.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
@@ -80,6 +82,12 @@ class SelectableLabel(QLabel):
             # QLabel selection positions use UTF-16 code units, as does QString.
             selected_length = len(selected_text.encode("utf-16-le", "surrogatepass")) // 2
             self.setSelection(selection_start, selected_length)
+
+    def mouseDoubleClickEvent(self, event: object) -> None:
+        super().mouseDoubleClickEvent(event)  # type: ignore[arg-type]
+        selected = self.selectedText().strip()
+        if selected and len(selected) <= 100 and any(character.isalnum() for character in selected):
+            self.wordActivated.emit(selected)
 
     def setText(self, text: str) -> None:
         super().setText(text)
@@ -416,6 +424,8 @@ class MainWindow(QMainWindow):
         self.session_status.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         self.statusBar().addPermanentWidget(self.session_status, 1)
         self.result_source = label("Recognized text appears here.", "muted", selectable=True)
+        self.result_source.setToolTip("Double-click a recognized word to look it up.")
+        self.result_source.wordActivated.connect(self.lookup_word)
         self.result_translation = label("A little window into another language.", selectable=True)
         self.result_translation.setStyleSheet("font-size: 23px; font-weight: 550;")
         layout.addWidget(self.status_label)
@@ -801,6 +811,139 @@ class MainWindow(QMainWindow):
         row.addStretch()
         page.addLayout(row)
         page.addWidget(self.learning_page, 1)
+
+    def lookup_word(self, selected: str) -> None:
+        """Look up a double-clicked source word; saved entries stay local."""
+        word = selected.strip()
+        if not word or len(word) > 100 or not any(character.isalnum() for character in word):
+            return
+
+        snapshot = copy.deepcopy(self.settings)
+        local_matches = []
+        try:
+            from desktranslate.vocabulary import MAX_ENTRIES, MAX_LIST_LIMIT, VocabularyStore
+
+            store = VocabularyStore(data_dir() / "vocabulary.sqlite3")
+            offset = 0
+            while offset < MAX_ENTRIES:
+                page = store.list_entries(
+                    limit=MAX_LIST_LIMIT,
+                    offset=offset,
+                    source_language=snapshot.source if snapshot.source != "auto" else None,
+                    target_language=snapshot.target,
+                )
+                local_matches.extend(
+                    entry
+                    for entry in page
+                    if entry.source.casefold() == word.casefold()
+                )
+                offset += len(page)
+                if len(page) < MAX_LIST_LIMIT:
+                    break
+        except (OSError, ValueError, RuntimeError):
+            # A missing or unavailable local dictionary must not block a live lookup.
+            local_matches = []
+
+        if local_matches:
+            translations = list(dict.fromkeys(entry.translation for entry in local_matches))
+            QMessageBox.information(
+                self,
+                "Saved word",
+                f"{word}  ·  {snapshot.source} → {snapshot.target}\\n\\n"
+                + "\\n".join(translations[:8])
+                + "\\n\\nFound in your local Learning vocabulary.",
+            )
+            return
+
+        if self.jobs.busy:
+            self.notice("A setup task is already running. Try the word lookup again when it finishes.")
+            return
+        if SPECS[snapshot.provider].capabilities.context and not snapshot.model:
+            self.notice("Choose a model in Providers before looking up a word.")
+            self.navigation.setCurrentRow(1)
+            return
+        try:
+            factory = self.provider_factory(snapshot)
+        except DeskTranslateError as error:
+            self.notice(str(error))
+            self.navigation.setCurrentRow(1)
+            return
+
+        revision = self.settings_revision
+        self.notice(f"Looking up “{word}”…")
+
+        def operation() -> object:
+            provider = factory()
+            provider.cancelled = self.jobs.cancel
+            try:
+                result = provider.translate(
+                    TranslationRequest(
+                        word,
+                        snapshot.source,
+                        snapshot.target,
+                        snapshot.model,
+                        "custom",
+                        instructions=(
+                            "Act as a concise bilingual dictionary. Translate only the selected "
+                            "word or short phrase into the target language. Return its most common "
+                            "meaning; when genuinely ambiguous, give up to three short meanings "
+                            "separated by semicolons. Do not add examples or commentary."
+                        ),
+                    )
+                )
+                if not result.text.strip():
+                    raise DeskTranslateError("The provider returned an empty dictionary result.")
+                return result.text.strip()
+            finally:
+                provider.close()
+
+        def complete(result: object, error: str) -> None:
+            if self.closing:
+                return
+            if self.settings_revision != revision:
+                self.notice("Settings changed during lookup. Double-click the word again to use the new language pair.")
+                return
+            if error:
+                self.notice(error)
+                return
+            if isinstance(result, str):
+                self.show_word_lookup_result(word, result, snapshot.source, snapshot.target)
+
+        self.job(operation, complete)
+
+    def show_word_lookup_result(
+        self, word: str, translation: str, source_language: str, target_language: str
+    ) -> None:
+        """Show a dictionary result and let the user explicitly save it locally."""
+        dialog = QMessageBox(self)
+        dialog.setWindowTitle("Word dictionary")
+        dialog.setIcon(QMessageBox.Icon.Information)
+        dialog.setText(
+            f"{word}\\n\\n{translation}\\n\\n{source_language} → {target_language}"
+        )
+        save_button = dialog.addButton("Save to Learning", QMessageBox.ButtonRole.AcceptRole)
+        dialog.addButton(QMessageBox.StandardButton.Close)
+        dialog.exec()
+        if dialog.clickedButton() is not save_button:
+            return
+
+        from desktranslate.ui.learning import VocabularySaveDialog
+
+        review = VocabularySaveDialog(word, translation, source_language, target_language, self)
+        if review.exec() != QDialog.DialogCode.Accepted:
+            return
+        source_value, translation_value, language = review.values()
+        try:
+            from desktranslate.vocabulary import VocabularyStore
+
+            VocabularyStore(data_dir() / "vocabulary.sqlite3").add(
+                source_value, translation_value, language, target_language
+            )
+            if hasattr(self, "learning_page"):
+                self.learning_page.refresh()
+            self.notice("Word saved locally to Learning.")
+        except (OSError, ValueError, RuntimeError):
+            self.notice("The word could not be saved. No vocabulary data was sent online.")
 
     def save_selected_vocabulary(self) -> None:
         from desktranslate.ui.learning import VocabularySaveDialog

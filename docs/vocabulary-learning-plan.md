@@ -10,6 +10,7 @@ Status: the base vocabulary store, read-only contextual lookup and Learning page
 4. The app saves the approved pair locally with its source and target language metadata.
 5. The Learning page lists saved entries and supports language-pair filters, case-insensitive search, bounded paging and confirmed deletion.
 6. The contextual lookup may find saved terms in current text or the two most recent source lines. It is read-only and does not mutate the approved glossary.
+7. The spaced-repetition queue reviews up to 100 due words per session; additional due words remain queued for the next session.
 
 When the source language is configured as automatic detection, the save dialog requires the user to select the actual source language before enabling Save.
 

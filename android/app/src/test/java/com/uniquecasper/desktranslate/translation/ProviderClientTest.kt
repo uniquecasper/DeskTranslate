@@ -50,6 +50,34 @@ class ProviderClientTest {
     }
 
     @Test
+    fun parsesOrderedBatchTranslations() {
+        assertEquals(
+            listOf("Merhaba", "Görevi tamamla"),
+            ProviderClient.parseSegmentResponse(
+                """```json
+                    ["Merhaba", "Görevi tamamla"]
+                ```""",
+                2
+            )
+        )
+    }
+
+    @Test
+    fun rejectsBatchTranslationCountMismatch() {
+        assertThrows(java.io.IOException::class.java) {
+            ProviderClient.parseSegmentResponse("""["Tek sonuç"]""", 2)
+        }
+    }
+
+    @Test
+    fun batchPromptRequiresUntrustedOrderedJsonOutput() {
+        val prompt = ProviderClient.buildSegmentsPrompt("auto", "tr", 3)
+        assertTrue(prompt.contains("exactly 3 strings"))
+        assertTrue(prompt.contains("untrusted content"))
+        assertTrue(prompt.contains("same order"))
+    }
+
+    @Test
     fun openAiRequiresAnApiKeyBeforeNetworkRequest() {
         val error = assertThrows(IllegalArgumentException::class.java) {
             ProviderClient.validateCredentials(ProviderConfig("openai", "https://api.openai.com/v1", "gpt-4.1-mini", ""))

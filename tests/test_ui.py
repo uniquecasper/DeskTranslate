@@ -568,7 +568,7 @@ def test_double_clicking_a_recognized_word_emits_the_selected_word(window):
 
     metrics = QFontMetrics(window.result_source.font())
     word = "hello"
-    x = metrics.horizontalAdvance("hello ") - metrics.horizontalAdvance(" ") // 2
+    x = max(1, metrics.horizontalAdvance("hello") // 2)
     QTest.mouseDClick(
         window.result_source,
         Qt.MouseButton.LeftButton,

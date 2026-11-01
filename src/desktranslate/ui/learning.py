@@ -28,6 +28,10 @@ from PySide6.QtWidgets import (
 )
 
 from desktranslate.languages import LANGUAGES
+from desktranslate.vocabulary_review import (
+    ReviewItem,
+    VocabularyReviewStore,
+)
 from desktranslate.vocabulary import (
     MAX_ENTRIES,
     MAX_LIST_LIMIT,
@@ -117,6 +121,121 @@ class VocabularySaveDialog(QDialog):
         return self.source_edit.text(), self.translation_edit.text(), source_language
 
 
+class VocabularyReviewDialog(QDialog):
+    """A short, local review session with explicit four-button grading."""
+
+    RATINGS = (
+        ("Again · 10 min", "again"),
+        ("Hard", "hard"),
+        ("Good", "good"),
+        ("Easy", "easy"),
+    )
+
+    def __init__(
+        self,
+        items: list[ReviewItem],
+        review_store: VocabularyReviewStore,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self.items = items
+        self.review_store = review_store
+        self.position = 0
+        self.setWindowTitle("Vocabulary review")
+        self.setMinimumWidth(440)
+
+        layout = QVBoxLayout(self)
+        self.progress_label = QLabel()
+        self.progress_label.setAccessibleName("Review progress")
+        self.word_label = QLabel()
+        self.word_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        self.word_label.setStyleSheet("font-size: 24px; font-weight: 600;")
+        self.word_label.setAccessibleName("Word being reviewed")
+        self.answer_label = QLabel()
+        self.answer_label.setWordWrap(True)
+        self.answer_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        self.answer_label.setAccessibleName("Word translation answer")
+        self.answer_label.hide()
+        layout.addWidget(self.progress_label)
+        layout.addWidget(self.word_label)
+        layout.addWidget(self.answer_label)
+
+        self.show_answer_button = QPushButton("Show answer")
+        self.show_answer_button.setAccessibleName("Show vocabulary answer")
+        layout.addWidget(self.show_answer_button)
+
+        rating_row = QHBoxLayout()
+        self.rating_buttons: dict[str, QPushButton] = {}
+        for title, rating in self.RATINGS:
+            button = QPushButton(title)
+            button.setEnabled(False)
+            button.setAccessibleName(f"Rate vocabulary {rating}")
+            button.clicked.connect(
+                lambda _checked=False, selected=rating: self.rate_current(selected)
+            )
+            self.rating_buttons[rating] = button
+            rating_row.addWidget(button)
+        layout.addLayout(rating_row)
+
+        self.close_button = QPushButton("Close")
+        self.close_button.clicked.connect(self.accept)
+        layout.addWidget(self.close_button)
+        self.show_answer_button.clicked.connect(self.show_answer)
+        self._render_current()
+
+    def _render_current(self) -> None:
+        if self.position >= len(self.items):
+            self.progress_label.setText("Review session complete")
+            self.word_label.setText(
+                f"You reviewed {len(self.items)} "
+                f"{'word' if len(self.items) == 1 else 'words'}."
+            )
+            self.answer_label.hide()
+            self.show_answer_button.hide()
+            for button in self.rating_buttons.values():
+                button.hide()
+            self.close_button.setText("Done")
+            return
+
+        item = self.items[self.position]
+        self.progress_label.setText(
+            f"Word {self.position + 1} of {len(self.items)} · "
+            f"{item.entry.source_language} → {item.entry.target_language}"
+        )
+        self.word_label.setText(item.entry.source)
+        self.answer_label.setText(item.entry.translation)
+        self.answer_label.hide()
+        self.show_answer_button.show()
+        self.show_answer_button.setEnabled(True)
+        for button in self.rating_buttons.values():
+            button.show()
+            button.setEnabled(False)
+
+    def show_answer(self) -> None:
+        if self.position >= len(self.items):
+            return
+        self.answer_label.show()
+        self.show_answer_button.setEnabled(False)
+        for button in self.rating_buttons.values():
+            button.setEnabled(True)
+
+    def rate_current(self, rating: str) -> None:
+        if self.position >= len(self.items):
+            return
+        item = self.items[self.position]
+        try:
+            self.review_store.review(item.entry.id, rating)
+        except (OSError, ValueError, RuntimeError):
+            QMessageBox.warning(
+                self,
+                "Review not saved",
+                "This review could not be saved. The word remains in your local vocabulary.",
+            )
+            return
+        self.position += 1
+        self._render_current()
+
+
 class LearningPage(QWidget):
     """Review and search explicitly saved terms without exporting them."""
 
@@ -130,6 +249,7 @@ class LearningPage(QWidget):
         super().__init__(parent)
         self._store_factory = store_factory
         self._store: VocabularyStore | None = None
+        self._review_store: VocabularyReviewStore | None = None
         self.page_number = 0
         self.match_count = 0
         self.total_count = 0
@@ -154,6 +274,16 @@ class LearningPage(QWidget):
         filters.addWidget(self.source_filter)
         filters.addWidget(self.target_filter)
         layout.addLayout(filters)
+
+        review_row = QHBoxLayout()
+        self.review_status_label = QLabel("Review schedule is ready when you save words.")
+        self.review_status_label.setWordWrap(True)
+        self.review_button = QPushButton("Review due words")
+        self.review_button.setAccessibleName("Start spaced-repetition vocabulary review")
+        self.review_button.setEnabled(False)
+        review_row.addWidget(self.review_status_label, 1)
+        review_row.addWidget(self.review_button)
+        layout.addLayout(review_row)
 
         search_row = QHBoxLayout()
         self.search_edit = QLineEdit()
@@ -199,6 +329,7 @@ class LearningPage(QWidget):
         self.previous_button.clicked.connect(self.previous_page)
         self.next_button.clicked.connect(self.next_page)
         self.delete_button.clicked.connect(self.delete_selected)
+        self.review_button.clicked.connect(self.start_review)
 
     def showEvent(self, event: QShowEvent) -> None:
         super().showEvent(event)
@@ -211,6 +342,40 @@ class LearningPage(QWidget):
         if self._store is None:
             self._store = self._store_factory()
         return self._store
+
+    @property
+    def review_store(self) -> VocabularyReviewStore:
+        if self._review_store is None:
+            self._review_store = VocabularyReviewStore(self.store.path)
+        return self._review_store
+
+    def refresh_review_status(self) -> None:
+        try:
+            due = self.review_store.due_count()
+            self.review_status_label.setText(
+                f"{due} {'word' if due == 1 else 'words'} due for review"
+                if due
+                else "All caught up · No words due for review"
+            )
+            self.review_button.setEnabled(due > 0)
+        except (OSError, ValueError, RuntimeError):
+            self.review_status_label.setText("Local review schedule is unavailable.")
+            self.review_button.setEnabled(False)
+
+    def start_review(self) -> None:
+        try:
+            items = self.review_store.due_entries()
+            if not items:
+                self.refresh_review_status()
+                return
+            dialog = VocabularyReviewDialog(items, self.review_store, self)
+            dialog.exec()
+            self.refresh()
+        except (OSError, ValueError, RuntimeError):
+            self.review_status_label.setText(
+                "The review queue could not be opened. Your saved vocabulary was not changed."
+            )
+            self.review_button.setEnabled(False)
 
     def _filters_changed(self) -> None:
         self.page_number = 0
@@ -295,6 +460,7 @@ class LearningPage(QWidget):
             self.previous_button.setEnabled(self.page_number > 0)
             self.next_button.setEnabled(last < matches)
             self.delete_button.setEnabled(bool(visible))
+            self.refresh_review_status()
         except (OSError, ValueError, RuntimeError):
             self.table.setRowCount(0)
             self.match_count = 0
@@ -305,6 +471,8 @@ class LearningPage(QWidget):
             self.status_label.setText(
                 "Saved vocabulary could not be opened. Your existing data was not changed."
             )
+            self.review_status_label.setText("Local review schedule is unavailable.")
+            self.review_button.setEnabled(False)
 
     def delete_selected(self) -> None:
         row = self.table.currentRow()

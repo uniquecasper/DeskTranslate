@@ -272,14 +272,18 @@ class VocabularyReviewStore:
                 (entry_id,),
             ).fetchone()
 
-            previous = _state(row) if row is not None else ReviewState(
-                entry_id=entry_id,
-                due_at=timestamp,
-                interval_days=0.0,
-                ease=2.5,
-                repetitions=0,
-                lapses=0,
-                last_reviewed_at="",
+            previous = (
+                _state(row)
+                if row is not None
+                else ReviewState(
+                    entry_id=entry_id,
+                    due_at=timestamp,
+                    interval_days=0.0,
+                    ease=2.5,
+                    repetitions=0,
+                    lapses=0,
+                    last_reviewed_at="",
+                )
             )
             ease = previous.ease
             lapses = previous.lapses
@@ -339,4 +343,6 @@ class VocabularyReviewStore:
                 """,
                 (entry_id, due_at, interval_days, ease, repetitions, lapses, timestamp),
             )
-            return ReviewState(entry_id, due_at, interval_days, ease, repetitions, lapses, timestamp)
+            return ReviewState(
+                entry_id, due_at, interval_days, ease, repetitions, lapses, timestamp
+            )

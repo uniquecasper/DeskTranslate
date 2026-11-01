@@ -135,9 +135,7 @@ def test_review_table_creation_preserves_version_one_database(tmp_path):
         version = connection.execute("PRAGMA user_version").fetchone()[0]
         tables = {
             row[0]
-            for row in connection.execute(
-                "SELECT name FROM sqlite_master WHERE type = 'table'"
-            )
+            for row in connection.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
         }
     finally:
         connection.close()

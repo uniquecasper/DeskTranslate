@@ -36,6 +36,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -290,6 +291,8 @@ private fun DeskTranslateScreen(
     var lastAutoAttemptSignature by remember { mutableStateOf("") }
     var lastAutoTranslationAt by remember { mutableStateOf(0L) }
     var latestOcrSignature by remember { mutableStateOf("") }
+    var latestRequestSignature by remember { mutableStateOf("") }
+    val latestBlocks by rememberUpdatedState(recognizedBlocks)
 
     val providerId = provider.trim().lowercase()
     val storedKey = remember(providerId, credentialRevision) {
@@ -348,6 +351,10 @@ private fun DeskTranslateScreen(
     ) {
         val cleanBlocks = blocks.filter { it.text.isNotBlank() }.take(MAX_OCR_SEGMENTS)
         if (cleanBlocks.isEmpty() || busy) return
+        // Prevent the busy-state recomposition from scheduling the same failed request
+        // repeatedly. A changed text or provider configuration creates a new signature.
+        lastAutoAttemptSignature = requestSignature
+        val blockTextSignature = cleanBlocks.joinToString("\n") { it.text }.trim().take(12000)
         val config = ProviderConfig(
             provider = providerId,
             endpoint = endpoint.trim(),
@@ -365,7 +372,7 @@ private fun DeskTranslateScreen(
                     targetLanguage
                 )
             }
-            if (latestOcrSignature != requestSignature) {
+            if (latestOcrSignature != blockTextSignature || latestRequestSignature != requestSignature) {
                 message = "A newer screen frame arrived; discarded the outdated translation."
                 return
             }
@@ -383,7 +390,6 @@ private fun DeskTranslateScreen(
             translation = translated.joinToString("\n")
             sourceText = cleanBlocks.joinToString("\n") { it.text }
             lastAutoTranslationAt = SystemClock.elapsedRealtime()
-            lastAutoAttemptSignature = requestSignature
             message = "Translated ${regions.size} lines. Drawing translations over the original text…"
             onShowBlocks(regions)
         } catch (cancelled: CancellationException) {
@@ -434,6 +440,7 @@ private fun DeskTranslateScreen(
             targetLanguage,
             candidate
         ).joinToString("\u0000")
+        latestRequestSignature = requestSignature
         if (requestSignature == lastAutoAttemptSignature) return@LaunchedEffect
 
         // Key the debounce on stable OCR text, not per-frame IDs, so harmless geometry
@@ -446,7 +453,7 @@ private fun DeskTranslateScreen(
         if (lastAutoTranslationAt > 0L && remaining > 0L) delay(remaining)
         if (latestOcrSignature != candidate || busy) return@LaunchedEffect
 
-        val frameBlocks = recognizedBlocks
+        val frameBlocks = latestBlocks
             .filter { it.text.isNotBlank() }
             .take(MAX_OCR_SEGMENTS)
         if (frameBlocks.joinToString("\n") { it.text }.trim() != candidate) return@LaunchedEffect

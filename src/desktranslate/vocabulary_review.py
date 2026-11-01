@@ -163,6 +163,10 @@ class VocabularyReviewStore:
                 raise VocabularyReviewError(
                     "The local review database does not have the expected schema."
                 )
+            connection.execute(
+                "DELETE FROM vocabulary_review_state "
+                "WHERE entry_id NOT IN (SELECT id FROM vocabulary_entries)"
+            )
 
     def state(self, entry_id: int) -> ReviewState | None:
         entry_id = _entry_id(entry_id)
@@ -314,8 +318,12 @@ class VocabularyReviewStore:
                 repetitions = previous.repetitions + 1
                 ease = min(5.0, ease + 0.15)
 
-            interval_days = min(float(MAX_INTERVAL_DAYS), round(interval_days, 4))
-            due_at = _stamp(current + timedelta(days=interval_days))
+            interval_days = min(float(MAX_INTERVAL_DAYS), round(interval_days, 8))
+            due_at = (
+                _stamp(current + timedelta(minutes=10))
+                if rating == "again"
+                else _stamp(current + timedelta(days=interval_days))
+            )
             connection.execute(
                 """
                 INSERT INTO vocabulary_review_state (

@@ -823,12 +823,17 @@ class MainWindow(QMainWindow):
         page.addWidget(self.learning_page, 1)
 
     def lookup_word(self, selected: str) -> None:
-        """Look up a double-clicked source word; saved entries stay local."""
+        """Look up a double-clicked source word without transmitting screen context."""
         word = selected.strip()
         if not word or len(word) > 100 or not any(character.isalnum() for character in word):
             return
 
         snapshot = copy.deepcopy(self.settings)
+        from desktranslate.dictionary import (
+            DictionaryLookupError,
+            EnglishDictionaryEntry,
+            lookup_english_word,
+        )
         from desktranslate.vocabulary import (
             MAX_ENTRIES,
             MAX_LIST_LIMIT,
@@ -857,60 +862,77 @@ class MainWindow(QMainWindow):
             # A missing or unavailable local dictionary must not block a live lookup.
             local_matches = []
 
-        if local_matches:
-            translations = list(dict.fromkeys(entry.translation for entry in local_matches))
-            QMessageBox.information(
-                self,
-                "Saved word",
-                f"{word}  ·  {snapshot.source} → {snapshot.target}\n\n"
-                + "\n".join(translations[:8])
-                + "\n\nFound in your local Learning vocabulary.",
-            )
+        local_translation = "; ".join(
+            dict.fromkeys(entry.translation for entry in local_matches)
+        )
+        if self.jobs.busy:
+            if local_translation:
+                self.show_word_lookup_result(
+                    word,
+                    local_translation,
+                    snapshot.source,
+                    snapshot.target,
+                    lookup_note="Online dictionary details were skipped because another task is running.",
+                )
+            else:
+                self.notice(
+                    "A setup task is already running. Try the word lookup again when it finishes."
+                )
             return
 
-        if self.jobs.busy:
-            self.notice(
-                "A setup task is already running. Try the word lookup again when it finishes."
-            )
-            return
-        if SPECS[snapshot.provider].capabilities.context and not snapshot.model:
-            self.notice("Choose a model in Providers before looking up a word.")
-            self.navigation.setCurrentRow(1)
-            return
-        try:
-            factory = self.provider_factory(snapshot)
-        except DeskTranslateError as error:
-            self.notice(str(error))
-            self.navigation.setCurrentRow(1)
-            return
+        factory: Callable[[], Any] | None = None
+        provider_error = ""
+        if not local_translation:
+            if SPECS[snapshot.provider].capabilities.context and not snapshot.model:
+                provider_error = "Choose a model in Providers to translate this word."
+            else:
+                try:
+                    factory = self.provider_factory(snapshot)
+                except DeskTranslateError as error:
+                    provider_error = str(error)
 
         revision = self.settings_revision
         self.notice(f"Looking up “{word}”…")
 
         def operation() -> object:
-            provider = factory()
-            provider.cancelled = self.jobs.cancel
-            try:
-                result = provider.translate(
-                    TranslationRequest(
-                        word,
-                        snapshot.source,
-                        snapshot.target,
-                        snapshot.model,
-                        "custom",
-                        instructions=(
-                            "Act as a concise bilingual dictionary. Translate only the selected "
-                            "word or short phrase into the target language. Return its most common "
-                            "meaning; when genuinely ambiguous, give up to three short meanings "
-                            "separated by semicolons. Do not add examples or commentary."
-                        ),
+            dictionary_entry: EnglishDictionaryEntry | None = None
+            if snapshot.source == "en":
+                try:
+                    dictionary_entry = lookup_english_word(word)
+                except (DictionaryLookupError, ValueError):
+                    # Definitions/examples are optional enrichment; translation stays available.
+                    dictionary_entry = None
+
+            translation = local_translation
+            if not translation and factory is not None:
+                provider = factory()
+                provider.cancelled = self.jobs.cancel
+                try:
+                    result = provider.translate(
+                        TranslationRequest(
+                            word,
+                            snapshot.source,
+                            snapshot.target,
+                            snapshot.model,
+                            "custom",
+                            instructions=(
+                                "Translate only the explicitly selected word or short phrase "
+                                "into the target language. Return its most common meaning; "
+                                "when genuinely ambiguous, give up to three short meanings "
+                                "separated by semicolons. Do not add commentary."
+                            ),
+                        )
                     )
+                    translation = result.text.strip()
+                finally:
+                    provider.close()
+
+            if not translation and dictionary_entry is None:
+                raise DeskTranslateError(
+                    provider_error
+                    or "No dictionary entry or translation was available for this word."
                 )
-                if not result.text.strip():
-                    raise DeskTranslateError("The provider returned an empty dictionary result.")
-                return result.text.strip()
-            finally:
-                provider.close()
+            return (translation, dictionary_entry, provider_error)
 
         def complete(result: object, error: str) -> None:
             if self.closing:
@@ -923,23 +945,85 @@ class MainWindow(QMainWindow):
             if error:
                 self.notice(error)
                 return
-            if isinstance(result, str):
-                self.show_word_lookup_result(word, result, snapshot.source, snapshot.target)
+            if (
+                isinstance(result, tuple)
+                and len(result) == 3
+                and isinstance(result[0], str)
+                and (result[1] is None or isinstance(result[1], EnglishDictionaryEntry))
+                and isinstance(result[2], str)
+            ):
+                translation, entry, note = result
+                self.show_word_lookup_result(
+                    word,
+                    translation,
+                    snapshot.source,
+                    snapshot.target,
+                    dictionary_entry=entry,
+                    lookup_note=note,
+                )
 
         self.job(operation, complete)
 
     def show_word_lookup_result(
-        self, word: str, translation: str, source_language: str, target_language: str
+        self,
+        word: str,
+        translation: str,
+        source_language: str,
+        target_language: str,
+        *,
+        dictionary_entry: EnglishDictionaryEntry | None = None,
+        lookup_note: str = "",
     ) -> None:
-        """Show a dictionary result and let the user explicitly save it locally."""
+        """Show the meaning, English definition and example with source attribution."""
+        sections = [word]
+        if translation:
+            sections.append(f"Meaning ({target_language}):\n{translation}")
+        else:
+            sections.append(f"Meaning ({target_language}): unavailable")
+
+        if dictionary_entry is not None:
+            sections.append("English explanation and example:")
+            for index, sense in enumerate(dictionary_entry.senses, start=1):
+                heading = f"{index}. {sense.part_of_speech}" if sense.part_of_speech else f"{index}."
+                sections.append(f"{heading} {sense.definition}")
+                if sense.example:
+                    sections.append(f"Example: {sense.example}")
+        elif source_language == "en":
+            sections.append(
+                "English definition/example: unavailable. The public dictionary service "
+                "may be offline or may not contain this word."
+            )
+        else:
+            sections.append(
+                "English definitions and examples are currently available for words "
+                "looked up with English as the source language."
+            )
+
         dialog = QMessageBox(self)
         dialog.setWindowTitle("Word dictionary")
         dialog.setIcon(QMessageBox.Icon.Information)
-        dialog.setText(f"{word}\n\n{translation}\n\n{source_language} → {target_language}")
-        save_button = dialog.addButton("Save to Learning", QMessageBox.ButtonRole.AcceptRole)
+        dialog.setText("\n\n".join(sections))
+
+        attribution: list[str] = []
+        if dictionary_entry is not None:
+            attribution.append("Dictionary data: Free Dictionary API (dictionaryapi.dev)")
+            if dictionary_entry.source_urls:
+                attribution.append("Original source(s): " + ", ".join(dictionary_entry.source_urls[:3]))
+            if dictionary_entry.license_name:
+                attribution.append("License: " + dictionary_entry.license_name)
+            if dictionary_entry.license_url:
+                attribution.append("License details: " + dictionary_entry.license_url)
+        if lookup_note:
+            attribution.append(lookup_note)
+        if attribution:
+            dialog.setInformativeText("\n".join(attribution))
+
+        save_button = None
+        if translation:
+            save_button = dialog.addButton("Save to Learning", QMessageBox.ButtonRole.AcceptRole)
         dialog.addButton(QMessageBox.StandardButton.Close)
         dialog.exec()
-        if dialog.clickedButton() is not save_button:
+        if save_button is None or dialog.clickedButton() is not save_button:
             return
 
         from desktranslate.ui.learning import VocabularySaveDialog

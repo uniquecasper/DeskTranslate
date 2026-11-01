@@ -100,3 +100,11 @@ def test_natural_sql_verbs_are_not_mistaken_for_code():
 
     assert protected.masked_text == source
     assert not protected.only_code
+
+
+def test_remove_code_keeps_only_prose_for_context():
+    from desktranslate.code_detection import remove_code
+
+    source = "The player enters the menu.\\nconst total = 3;\\nContinue to the next level."
+    assert remove_code(source) == "The player enters the menu.\\nContinue to the next level."
+    assert remove_code("def run():\\n    return 1").strip() == ""

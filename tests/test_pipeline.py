@@ -132,7 +132,7 @@ def test_code_is_masked_from_provider_and_restored_in_delivered_result():
     provider = RecordingProvider()
     pipeline = Pipeline(
         Settings(quality="fast", recent_region=[0, 0, 120, 80]),
-        Capture(),
+        lambda: Capture(),
         CodeOCR,
         lambda: provider,
         once=True,

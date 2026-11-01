@@ -46,6 +46,11 @@ from PySide6.QtWidgets import (
 )
 
 from desktranslate.capture import MSSCapture, physical_monitors, topology_signature
+from desktranslate.dictionary import (
+    DictionaryLookupError,
+    EnglishDictionaryEntry,
+    lookup_english_word,
+)
 from desktranslate.errors import DeskTranslateError
 from desktranslate.hotkeys import Hotkeys, validate_hotkeys
 from desktranslate.languages import LANGUAGES, source_languages
@@ -829,11 +834,6 @@ class MainWindow(QMainWindow):
             return
 
         snapshot = copy.deepcopy(self.settings)
-        from desktranslate.dictionary import (
-            DictionaryLookupError,
-            EnglishDictionaryEntry,
-            lookup_english_word,
-        )
         from desktranslate.vocabulary import (
             MAX_ENTRIES,
             MAX_LIST_LIMIT,
@@ -924,6 +924,8 @@ class MainWindow(QMainWindow):
                         )
                     )
                     translation = result.text.strip()
+                except DeskTranslateError as error:
+                    provider_error = str(error)
                 finally:
                     provider.close()
 

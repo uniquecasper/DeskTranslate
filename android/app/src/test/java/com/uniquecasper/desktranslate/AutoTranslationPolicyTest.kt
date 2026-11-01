@@ -20,6 +20,20 @@ class AutoTranslationPolicyTest {
     }
 
     @Test
+    fun ignoresPartialCaptureOfDeskTranslateScreen() {
+        val partialOwnScreen = """
+            DeskTranslate
+            Android companion automatic screen translation
+            Screen capture
+            Text recognized locally
+            Start capture
+            OCR script Latin
+        """.trimIndent()
+
+        assertTrue(AutoTranslationPolicy.isDeskTranslateUi(partialOwnScreen))
+    }
+
+    @Test
     fun allowsGameText() {
         val gameText = "Quest complete. Return to the village and speak with the guide."
 

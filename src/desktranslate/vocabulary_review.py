@@ -141,8 +141,7 @@ class VocabularyReviewStore:
                 (_TABLE,),
             ).fetchall()
             actual = tuple(
-                (row["name"], str(row["type"]).upper(), row["notnull"], row["pk"])
-                for row in rows
+                (row["name"], str(row["type"]).upper(), row["notnull"], row["pk"]) for row in rows
             )
             index = connection.execute(
                 "SELECT name FROM sqlite_master WHERE type = 'index' "
@@ -340,12 +339,4 @@ class VocabularyReviewStore:
                 """,
                 (entry_id, due_at, interval_days, ease, repetitions, lapses, timestamp),
             )
-            return ReviewState(
-                entry_id=entry_id,
-                due_at=due_at,
-                interval_days=interval_days,
-                ease=ease,
-                repetitions=repetitions,
-                lapses=lapses,
-                last_reviewed_at=timestamp,
-            )
+            return ReviewState(entry_id, due_at, interval_days, ease, repetitions, lapses, timestamp)

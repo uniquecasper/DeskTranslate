@@ -13,7 +13,7 @@ from PIL import Image
 
 from desktranslate.algorithms import PRESETS, FrameGate, preprocess
 from desktranslate.context import ContextEngine, TranslationCache, TranslationContext, cache_key
-from desktranslate.code_detection import protect_code
+from desktranslate.code_detection import protect_code, remove_code
 from desktranslate.errors import (
     Cancelled,
     ConfigurationError,
@@ -703,7 +703,18 @@ class Pipeline:
                 # share a cached translation. Only masked placeholders reach providers.
                 key = cache_key(self.settings.provider, self.settings.endpoint, request)
                 protected = protect_code(request.text)
-                provider_request = replace(request, text=protected.masked_text)
+                safe_context = tuple(
+                    replace(
+                        pair,
+                        source=remove_code(pair.source),
+                        translation=remove_code(pair.translation),
+                    )
+                    for pair in request.context
+                )
+                safe_context = tuple(pair for pair in safe_context if pair.source.strip())
+                provider_request = replace(
+                    request, text=protected.masked_text, context=safe_context
+                )
                 result = (
                     TranslationResult(work.text)
                     if protected.only_code

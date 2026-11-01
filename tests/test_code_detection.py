@@ -22,12 +22,10 @@ def test_fenced_code_is_masked_and_restored_byte_for_byte():
 
     assert code not in protected.masked_text
     assert len(protected.fragments) == 1
-    translated = protected.masked_text.replace("Explain this example:", "Bu örneği açıkla:").replace(
-        "It prints a greeting.", "Bir selamlama yazdırır."
-    )
-    assert protected.restore(translated) == (
-        f"Bu örneği açıkla:\n{code}\nBir selamlama yazdırır."
-    )
+    translated = protected.masked_text.replace(
+        "Explain this example:", "Bu örneği açıkla:"
+    ).replace("It prints a greeting.", "Bir selamlama yazdırır.")
+    assert protected.restore(translated) == (f"Bu örneği açıkla:\n{code}\nBir selamlama yazdırır.")
 
 
 def test_inline_code_is_protected_inside_prose():
@@ -59,7 +57,9 @@ def test_code_only_text_skips_translation():
 @pytest.mark.parametrize("damage", ["missing", "duplicate", "reordered"])
 def test_changed_code_markers_are_rejected(damage: str):
     tick = chr(96)
-    protected = protect_code("Use " + tick + "x = 1" + tick + " then call " + tick + "run()" + tick + ".")
+    protected = protect_code(
+        "Use " + tick + "x = 1" + tick + " then call " + tick + "run()" + tick + "."
+    )
     assert len(protected.tokens) == 2
     result = protected.masked_text
     first, second = protected.tokens

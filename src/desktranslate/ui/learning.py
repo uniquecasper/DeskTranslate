@@ -28,10 +28,6 @@ from PySide6.QtWidgets import (
 )
 
 from desktranslate.languages import LANGUAGES
-from desktranslate.vocabulary_review import (
-    ReviewItem,
-    VocabularyReviewStore,
-)
 from desktranslate.vocabulary import (
     MAX_ENTRIES,
     MAX_LIST_LIMIT,
@@ -40,6 +36,7 @@ from desktranslate.vocabulary import (
     VocabularyEntry,
     VocabularyStore,
 )
+from desktranslate.vocabulary_review import ReviewItem, VocabularyReviewStore
 
 
 class VocabularySaveDialog(QDialog):

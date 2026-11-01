@@ -1,6 +1,6 @@
 # Vocabulary Learning — Implementation and Verification
 
-Status: implemented on `main`. The local vocabulary store, read-only contextual lookup and Learning page are integrated. The UI supports explicit selection/review, saving, language-pair filtering, bounded search/paging and confirmed deletion.
+Status: the base vocabulary store, read-only contextual lookup and Learning page are already on `main`. Spaced-repetition review is staged on `feature/desktranslate-2-1-srs-final`; it is not shipped until the stacked PR passes Windows CI, review and release qualification.
 
 ## User workflow
 
@@ -10,6 +10,7 @@ Status: implemented on `main`. The local vocabulary store, read-only contextual 
 4. The app saves the approved pair locally with its source and target language metadata.
 5. The Learning page lists saved entries and supports language-pair filters, case-insensitive search, bounded paging and confirmed deletion.
 6. The contextual lookup may find saved terms in current text or the two most recent source lines. It is read-only and does not mutate the approved glossary.
+7. The spaced-repetition queue reviews up to 100 due words per session; additional due words remain queued for the next session.
 
 When the source language is configured as automatic detection, the save dialog requires the user to select the actual source language before enabling Save.
 
@@ -29,10 +30,12 @@ When the source language is configured as automatic detection, the save dialog r
 |---|---|
 | `src/desktranslate/vocabulary.py` | Bounded SQLite persistence and validation |
 | `src/desktranslate/vocabulary_lookup.py` | Read-only matching against current and recent source text |
+| `src/desktranslate/vocabulary_review.py` | Local review queue, due dates and interval scheduling |
 | `src/desktranslate/ui/learning.py` | Learning page, explicit save dialog, filters, search, paging and delete |
 | `src/desktranslate/ui/window.py` | Connects the Learning page to the main window and selected translation |
 | `tests/test_vocabulary.py` | Storage, validation, Unicode and database behavior |
 | `tests/test_vocabulary_lookup.py` | Language isolation, ranking, bounds and context matching |
+| `tests/test_vocabulary_review.py` | Review scheduling, due queue, safe table creation and persistence |
 | `tests/test_learning.py` | UI workflow and selection behavior |
 
 ## Verification matrix
@@ -49,6 +52,8 @@ When the source language is configured as automatic detection, the save dialog r
 | Database migration | Fresh, current, newer, malformed schemas | Safe initialization or explicit error; no silent reset |
 | Concurrency | Overlapping writes near the collection limit | Unique constraints hold; cap is never exceeded; errors are handled |
 | Privacy | Inspect the database and logs after save | Only approved vocabulary fields exist; no secrets, frames or transcripts |
+| Spaced repetition | Again, Hard, Good and Easy ratings | Due dates progress as specified; lapse count and ease factor update predictably |
+| Legacy data | Open a version-1 vocabulary DB with existing saved entries | New review table is added without changing old vocabulary rows or schema version |
 | Integration | Save from result, list/review, filter/search and delete via UI | Complete journey works without blocking the Qt event loop |
 | Packaging | Installed and portable app data paths | Database stored under the expected user/portable data directory |
 

@@ -125,9 +125,9 @@ def test_add_rejects_invalid_personal_notes(store, note):
 
 
 def test_personal_note_accepts_legitimate_unicode_joiners(store):
-    entry = store.add("hello", "merhaba", "en", "tr", "می\\u200cخواهم")
+    entry = store.add("hello", "merhaba", "en", "tr", "می\u200cخواهم")
 
-    assert entry.note == "می\\u200cخواهم"
+    assert entry.note == "می\u200cخواهم"
 
 
 def test_sql_metacharacters_are_stored_as_text(store, path):

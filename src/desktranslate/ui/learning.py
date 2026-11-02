@@ -525,7 +525,7 @@ class LearningPage(QWidget):
             )
             if not filename:
                 return
-            Path(filename).write_text(content, encoding="utf-8-sig", newline="")
+            Path(filename).write_text(content, encoding="utf-8", newline="")
             self.status_label.setText(
                 f"Exported {len(entries)} vocabulary entries. In Anki, map Front and Back "
                 "to your note fields; language columns are optional."

@@ -1,7 +1,7 @@
 """Explicit, local persistence for user-saved vocabulary.
 
-This module stores only term/translation pairs and language metadata. It never
-captures OCR output or dialogue by itself; callers decide when to save an item.
+This module stores explicitly saved term/translation pairs, language metadata and
+optional personal notes. It never captures OCR output or dialogue by itself.
 """
 
 from __future__ import annotations

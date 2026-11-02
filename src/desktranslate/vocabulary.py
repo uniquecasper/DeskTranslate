@@ -115,7 +115,6 @@ def _note(value: object) -> str:
     return value
 
 
-
 def _language(value: object, label: str) -> str:
     if not isinstance(value, str) or value not in REGISTRY or value == "auto":
         raise ValueError(f"{label} must be a supported, specific language code.")
@@ -370,7 +369,6 @@ class VocabularyStore:
             if row is None:
                 raise VocabularyStoreError("The saved vocabulary entry could not be read back.")
             return _entry(row)
-
 
     def update(
         self,

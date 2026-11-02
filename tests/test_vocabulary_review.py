@@ -34,6 +34,18 @@ def test_new_words_are_due_without_changing_existing_vocabulary_rows(stores):
     assert review.state(first.id) is None
 
 
+
+def test_due_review_entry_carries_personal_note(stores):
+    vocabulary, review = stores
+    entry = vocabulary.add("hello", "merhaba", "en", "tr", "A greeting to friends.")
+
+    due = review.due_entries()
+
+    assert len(due) == 1
+    assert due[0].entry.id == entry.id
+    assert due[0].entry.note == "A greeting to friends."
+
+
 def test_good_rating_schedules_first_review_for_one_day(stores):
     vocabulary, review = stores
     entry = vocabulary.add("hello", "merhaba", "en", "tr")

@@ -52,7 +52,7 @@ def _validate_note(value: object) -> str:
         raise ValueError("Personal note exceeds the saved vocabulary size limit.")
     if any(
         (unicodedata.category(char) == "Cc" and char not in {"\\n", "\\t"})
-        or char in {"\\u202a", "\\u202b", "\\u202c", "\\u202d", "\\u202e", "\\u2066", "\\u2067", "\\u2068", "\\u2069"}
+        or char in _BIDI_CONTROLS
         or unicodedata.category(char) in {"Zl", "Zp"}
         for char in value
     ):

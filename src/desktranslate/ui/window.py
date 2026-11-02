@@ -1035,20 +1035,15 @@ class MainWindow(QMainWindow):
         save_button = None
         if translation:
             save_button = dialog.addButton("Save to Learning", QMessageBox.ButtonRole.AcceptRole)
-        audio_button = None
         if dictionary_entry is not None and dictionary_entry.audio_urls:
+            audio_url = dictionary_entry.audio_urls[0]
             audio_button = dialog.addButton(
                 "Open pronunciation audio", QMessageBox.ButtonRole.ActionRole
             )
+            audio_button.clicked.connect(lambda: self.open_pronunciation_audio(audio_url))
         dialog.addButton(QMessageBox.StandardButton.Close)
         dialog.exec()
-        clicked_button = dialog.clickedButton()
-        if audio_button is not None and clicked_button is audio_button and dictionary_entry is not None:
-            opened = QDesktopServices.openUrl(QUrl(dictionary_entry.audio_urls[0]))
-            if not opened:
-                self.notice("The pronunciation audio link could not be opened.")
-            return
-        if save_button is None or clicked_button is not save_button:
+        if save_button is None or dialog.clickedButton() is not save_button:
             return
 
         from desktranslate.ui.learning import VocabularySaveDialog
@@ -1068,6 +1063,11 @@ class MainWindow(QMainWindow):
             self.notice("Word saved locally to Learning.")
         except (OSError, ValueError, RuntimeError):
             self.notice("The word could not be saved. No vocabulary data was sent online.")
+
+    def open_pronunciation_audio(self, audio_url: str) -> None:
+        """Open a validated dictionary audio URL only after an explicit click."""
+        if not QDesktopServices.openUrl(QUrl(audio_url)):
+            self.notice("The pronunciation audio link could not be opened.")
 
     def save_selected_vocabulary(self) -> None:
         from desktranslate.ui.learning import VocabularySaveDialog

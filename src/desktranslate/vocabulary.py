@@ -1,7 +1,7 @@
 """Explicit, local persistence for user-saved vocabulary.
 
-This module stores only term/translation pairs and language metadata. It never
-captures OCR output or dialogue by itself; callers decide when to save an item.
+This module stores explicitly saved term/translation pairs, language metadata and
+optional personal notes. It never captures OCR output or dialogue by itself.
 """
 
 from __future__ import annotations
@@ -16,12 +16,14 @@ from pathlib import Path
 
 from desktranslate.languages import REGISTRY
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 MAX_ENTRIES = 10_000
 MAX_SOURCE_CHARS = 500
 MAX_TRANSLATION_CHARS = 2_000
+MAX_NOTE_CHARS = 2_000
 MAX_SOURCE_BYTES = 2_000
 MAX_TRANSLATION_BYTES = 8_000
+MAX_NOTE_BYTES = 8_000
 MAX_LIST_LIMIT = 500
 DEFAULT_TIMEOUT_SECONDS = 5.0
 
@@ -29,7 +31,7 @@ _SQLITE_MAX_INT = 2**63 - 1
 _TABLE = "vocabulary_entries"
 _UNIQUE_COLUMNS = ("source_language", "target_language", "source", "translation")
 # (name, declared type, NOT NULL, primary-key position) in table order.
-_EXPECTED_COLUMNS = (
+_EXPECTED_COLUMNS_V1 = (
     ("id", "INTEGER", 0, 1),
     ("source", "TEXT", 1, 0),
     ("translation", "TEXT", 1, 0),
@@ -37,6 +39,7 @@ _EXPECTED_COLUMNS = (
     ("target_language", "TEXT", 1, 0),
     ("created_at", "TEXT", 1, 0),
 )
+_EXPECTED_COLUMNS = _EXPECTED_COLUMNS_V1 + (("note", "TEXT", 1, 0),)
 # Line/paragraph separators break the single-line contract; bidi embedding,
 # override and isolate controls can make a saved term render as something else.
 _REJECTED_CATEGORIES = frozenset({"Cc", "Zl", "Zp"})
@@ -60,6 +63,7 @@ class VocabularyEntry:
     source_language: str
     target_language: str
     created_at: str
+    note: str = ""
 
 
 def _text(value: object, label: str, max_chars: int, max_bytes: int) -> str:
@@ -88,6 +92,32 @@ def _text(value: object, label: str, max_chars: int, max_bytes: int) -> str:
     return value
 
 
+def _note(value: object) -> str:
+    """Validate an optional, multiline personal note without stripping Unicode joiners."""
+    if not isinstance(value, str):
+        raise ValueError("Personal note must be text.")
+    if len(value) > MAX_NOTE_CHARS * 4:
+        raise ValueError("Personal note is too large.")
+    value = unicodedata.normalize(
+        "NFC", value.replace("\r\n", "\n").replace("\r", "\n")
+    ).strip()
+    if len(value) > MAX_NOTE_CHARS or any(
+        (unicodedata.category(character) == "Cc" and character not in {"\n", "\t"})
+        or character in _BIDI_CONTROLS
+        or unicodedata.category(character) in {"Zl", "Zp"}
+        for character in value
+    ):
+        raise ValueError("Personal note contains unsupported control characters or is too long.")
+    try:
+        encoded = value.encode("utf-8")
+    except UnicodeEncodeError:
+        raise ValueError("Personal note contains invalid Unicode.") from None
+    if len(encoded) > MAX_NOTE_BYTES:
+        raise ValueError("Personal note is too large.")
+    return value
+
+
+
 def _language(value: object, label: str) -> str:
     if not isinstance(value, str) or value not in REGISTRY or value == "auto":
         raise ValueError(f"{label} must be a supported, specific language code.")
@@ -108,6 +138,7 @@ def _entry(row: sqlite3.Row) -> VocabularyEntry:
         source_language=str(row["source_language"]),
         target_language=str(row["target_language"]),
         created_at=str(row["created_at"]),
+        note=str(row["note"]),
     )
 
 
@@ -122,12 +153,15 @@ def _schema_version(connection: sqlite3.Connection) -> int:
     return version
 
 
-def _validate_schema(connection: sqlite3.Connection) -> None:
+def _validate_schema(connection: sqlite3.Connection, version: int = SCHEMA_VERSION) -> None:
     """Refuse (never repair) a database whose table is not the expected one."""
+    if version not in {1, SCHEMA_VERSION}:
+        raise VocabularyStoreError("The vocabulary database has an unsupported schema version.")
     rows = connection.execute(
         'SELECT name, type, "notnull", pk FROM pragma_table_info(?)', (_TABLE,)
     ).fetchall()
     actual = tuple((r["name"], str(r["type"]).upper(), r["notnull"], r["pk"]) for r in rows)
+    expected_columns = _EXPECTED_COLUMNS_V1 if version == 1 else _EXPECTED_COLUMNS
     has_unique_key = any(
         tuple(
             column["name"]
@@ -147,7 +181,12 @@ def _validate_schema(connection: sqlite3.Connection) -> None:
     normalized_sql = " ".join(table_sql.upper().split())
     has_expected_checks = (
         f"CHECK (LENGTH(SOURCE) BETWEEN 1 AND {MAX_SOURCE_CHARS})" in normalized_sql
-        and f"CHECK (LENGTH(TRANSLATION) BETWEEN 1 AND {MAX_TRANSLATION_CHARS})" in normalized_sql
+        and f"CHECK (LENGTH(TRANSLATION) BETWEEN 1 AND {MAX_TRANSLATION_CHARS})"
+        in normalized_sql
+    )
+    has_note_check = (
+        version == 1
+        or f"CHECK (LENGTH(NOTE) <= {MAX_NOTE_CHARS})" in normalized_sql
     )
     has_autoincrement = "ID INTEGER PRIMARY KEY AUTOINCREMENT" in normalized_sql
 
@@ -169,9 +208,10 @@ def _validate_schema(connection: sqlite3.Connection) -> None:
     has_expected_index = index_columns == ("source_language", "target_language", "id")
 
     if (
-        actual != _EXPECTED_COLUMNS
+        actual != expected_columns
         or not has_unique_key
         or not has_expected_checks
+        or not has_note_check
         or not has_autoincrement
         or not has_expected_index
     ):
@@ -223,20 +263,50 @@ class VocabularyStore:
 
     def _initialize(self) -> None:
         with self._session() as connection:
-            if _schema_version(connection) == SCHEMA_VERSION:
+            version = _schema_version(connection)
+            if version == SCHEMA_VERSION:
                 _validate_schema(connection)
                 return
+            if version == 1:
+                # Validate the complete old contract before applying any migration.
+                _validate_schema(connection, version=1)
+            elif version == 0:
+                foreign = connection.execute(
+                    "SELECT 1 FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' LIMIT 1"
+                ).fetchone()
+                if foreign is not None:
+                    raise VocabularyStoreError(
+                        "The file is not a DeskTranslate vocabulary database."
+                    )
+
         with self._session(write=True) as connection:
-            # Re-check under the write lock: another process may have initialized it.
-            if _schema_version(connection) == SCHEMA_VERSION:
+            # Re-check under the exclusive writer lock: another process may have upgraded it.
+            version = _schema_version(connection)
+            if version == SCHEMA_VERSION:
                 _validate_schema(connection)
                 return
+            if version == 1:
+                _validate_schema(connection, version=1)
+                connection.execute(
+                    """
+                    ALTER TABLE vocabulary_entries
+                    ADD COLUMN note TEXT NOT NULL DEFAULT ''
+                        CHECK (length(note) <= 2000)
+                    """
+                )
+                connection.execute("PRAGMA user_version = 2")
+                _validate_schema(connection)
+                return
+            if version != 0:
+                raise VocabularyStoreError("The vocabulary database has an unsupported schema.")
+
             foreign = connection.execute(
                 "SELECT 1 FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' LIMIT 1"
             ).fetchone()
             if foreign is not None:
-                # Version 0 with existing objects is some other application's database.
-                raise VocabularyStoreError("The file is not a DeskTranslate vocabulary database.")
+                raise VocabularyStoreError(
+                    "The file is not a DeskTranslate vocabulary database."
+                )
             connection.execute(
                 """
                 CREATE TABLE vocabulary_entries (
@@ -246,6 +316,7 @@ class VocabularyStore:
                     source_language TEXT NOT NULL,
                     target_language TEXT NOT NULL,
                     created_at TEXT NOT NULL,
+                    note TEXT NOT NULL DEFAULT '' CHECK (length(note) <= 2000),
                     UNIQUE (source_language, target_language, source, translation)
                 )
                 """
@@ -256,7 +327,7 @@ class VocabularyStore:
                 ON vocabulary_entries (source_language, target_language, id DESC)
                 """
             )
-            connection.execute("PRAGMA user_version = 1")
+            connection.execute("PRAGMA user_version = 2")
 
     def add(
         self,
@@ -264,6 +335,7 @@ class VocabularyStore:
         translation: str,
         source_language: str,
         target_language: str,
+        note: str = "",
     ) -> VocabularyEntry:
         """Save a term, returning the existing row for an exact duplicate."""
         source = _text(source, "Source term", MAX_SOURCE_CHARS, MAX_SOURCE_BYTES)
@@ -272,6 +344,7 @@ class VocabularyStore:
         )
         source_language = _language(source_language, "Source language")
         target_language = _language(target_language, "Target language")
+        note = _note(note)
         created_at = datetime.now(UTC).isoformat(timespec="seconds")
         key = (source_language, target_language, source, translation)
 
@@ -294,13 +367,66 @@ class VocabularyStore:
             cursor = connection.execute(
                 """
                 INSERT INTO vocabulary_entries (
-                    source_language, target_language, source, translation, created_at
-                ) VALUES (?, ?, ?, ?, ?)
+                    source_language, target_language, source, translation, created_at, note
+                ) VALUES (?, ?, ?, ?, ?, ?)
                 """,
-                (*key, created_at),
+                (*key, created_at, note),
             )
             row = connection.execute(
                 "SELECT * FROM vocabulary_entries WHERE id = ?", (cursor.lastrowid,)
+            ).fetchone()
+            if row is None:
+                raise VocabularyStoreError("The saved vocabulary entry could not be read back.")
+            return _entry(row)
+
+
+    def update(
+        self,
+        entry_id: int,
+        source: str,
+        translation: str,
+        note: str = "",
+    ) -> VocabularyEntry:
+        """Edit a saved source/meaning pair and its local note atomically."""
+        entry_id = _entry_id(entry_id)
+        source = _text(source, "Source term", MAX_SOURCE_CHARS, MAX_SOURCE_BYTES)
+        translation = _text(
+            translation, "Translation", MAX_TRANSLATION_CHARS, MAX_TRANSLATION_BYTES
+        )
+        note = _note(note)
+
+        with self._session(write=True) as connection:
+            existing = connection.execute(
+                "SELECT * FROM vocabulary_entries WHERE id = ?", (entry_id,)
+            ).fetchone()
+            if existing is None:
+                raise ValueError("The saved vocabulary entry no longer exists.")
+            duplicate = connection.execute(
+                """
+                SELECT id FROM vocabulary_entries
+                WHERE source_language = ? AND target_language = ?
+                    AND source = ? AND translation = ? AND id != ?
+                """,
+                (
+                    existing["source_language"],
+                    existing["target_language"],
+                    source,
+                    translation,
+                    entry_id,
+                ),
+            ).fetchone()
+            if duplicate is not None:
+                raise ValueError("An identical word pair already exists in this language pair.")
+            connection.execute(
+                """
+                UPDATE vocabulary_entries
+                SET source = ?, translation = ?, note = ?
+                WHERE id = ?
+                """,
+                (source, translation, note, entry_id),
+            )
+            row = connection.execute(
+                "SELECT * FROM vocabulary_entries WHERE id = ?", (entry_id,)
             ).fetchone()
             if row is None:
                 raise VocabularyStoreError("The saved vocabulary entry could not be read back.")

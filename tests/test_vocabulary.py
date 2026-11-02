@@ -114,6 +114,22 @@ def test_exact_duplicate_is_idempotent_but_different_translation_is_allowed(tmp_
     assert store.count() == 2
 
 
+@pytest.mark.parametrize(
+    "note",
+    [None, 1, "bad\\x00note", "abc\\u202edef", "x" * (vocabulary.MAX_NOTE_CHARS + 1)],
+)
+def test_add_rejects_invalid_personal_notes(store, note):
+    with pytest.raises(ValueError, match="Personal note"):
+        store.add("hello", "merhaba", "en", "tr", note)
+    assert store.count() == 0
+
+
+def test_personal_note_accepts_legitimate_unicode_joiners(store):
+    entry = store.add("hello", "merhaba", "en", "tr", "می\\u200cخواهم")
+
+    assert entry.note == "می\\u200cخواهم"
+
+
 def test_sql_metacharacters_are_stored_as_text(store, path):
     hostile = "x'); DROP TABLE vocabulary_entries; --"
 

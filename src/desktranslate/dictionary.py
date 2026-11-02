@@ -23,6 +23,7 @@ REQUEST_TIMEOUT_SECONDS = 4.0
 _ENDPOINT = "https://api.dictionaryapi.dev/api/v2/entries/en/"
 _AUDIO_HOST = "api.dictionaryapi.dev"
 _AUDIO_PREFIX = "/media/pronunciations/en/"
+_AUDIO_FILE_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,150}\.(?:mp3|ogg|wav)\Z", re.IGNORECASE)
 _WORD_PATTERN = re.compile(r"[^\W_]+(?:[-'][^\W_]+)*", re.UNICODE)
 _REJECTED_CATEGORIES = frozenset({"Cc", "Cf", "Zl", "Zp"})
 _BIDI_CONTROLS = frozenset("\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069")
@@ -85,7 +86,7 @@ def _safe_audio_url(value: object) -> str:
             or parsed.password is not None
             or parsed.fragment
             or not parsed.path.startswith(_AUDIO_PREFIX)
-            or not parsed.path.lower().endswith((".mp3", ".ogg", ".wav"))
+            or _AUDIO_FILE_PATTERN.fullmatch(parsed.path[len(_AUDIO_PREFIX) :]) is None
         ):
             return ""
         parsed.port  # Force validation of malformed port syntax.

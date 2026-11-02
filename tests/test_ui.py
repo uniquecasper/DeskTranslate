@@ -668,3 +668,30 @@ def test_dictionary_audio_button_opens_only_the_validated_source_url(window, mon
     )
 
     assert opened == ["https://api.dictionaryapi.dev/media/pronunciations/en/hello-us.mp3"]
+
+
+def test_translation_status_tooltip_exposes_latest_numeric_stages_only(window):
+    from desktranslate.models import PipelineEvent, SessionState, Stamp, TranslationResult
+
+    window.settings.onboarding_done = True
+    window.handle_pipeline_event(
+        PipelineEvent(
+            Stamp(1, 1),
+            SessionState.WATCHING,
+            source="PRIVATE_SOURCE_TEXT",
+            result=TranslationResult("PRIVATE_TRANSLATION_TEXT"),
+            timings={
+                "capture_ms": 3.0,
+                "ocr_call_ms": 180.5,
+                "temporal_ms": 0.4,
+                "provider_ms": 325.0,
+                "total_ms": 515.0,
+            },
+        )
+    )
+
+    tooltip = window.status_label.toolTip()
+    assert "Capture: Capture 3.0" in tooltip
+    assert "Process round-trip 180.5" in tooltip
+    assert "Provider 325.0" in tooltip
+    assert "PRIVATE" not in tooltip

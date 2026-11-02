@@ -149,16 +149,16 @@ def test_personal_note_is_stored_and_normalized(store):
         "merhaba",
         "en",
         "tr",
-        "  Example: hello there.\\r\\nRemember the greeting.  ",
+        "  Example: hello there.\r\nRemember the greeting.  ",
     )
 
-    assert entry.note == "Example: hello there.\\nRemember the greeting."
+    assert entry.note == "Example: hello there.\nRemember the greeting."
     assert store.get(entry.id) == entry
 
 
 def test_update_edits_source_translation_and_note_without_changing_language_or_created_time(store):
     saved = store.add("helo", "helo", "en", "tr")
-    review = store.update(saved.id, "hello", "merhaba", "Greeting\\nUse with friends.")
+    review = store.update(saved.id, "hello", "merhaba", "Greeting\nUse with friends.")
 
     assert review.id == saved.id
     assert review.source == "hello"
@@ -166,7 +166,7 @@ def test_update_edits_source_translation_and_note_without_changing_language_or_c
     assert review.source_language == "en"
     assert review.target_language == "tr"
     assert review.created_at == saved.created_at
-    assert review.note == "Greeting\\nUse with friends."
+    assert review.note == "Greeting\nUse with friends."
     assert store.get(saved.id) == review
 
 
@@ -187,7 +187,7 @@ def test_update_rejects_missing_ids_and_invalid_notes(store):
 
     saved = store.add("hello", "merhaba", "en", "tr")
     with pytest.raises(ValueError, match="Personal note"):
-        store.update(saved.id, "hello", "merhaba", "bad\\x00note")
+        store.update(saved.id, "hello", "merhaba", "bad\x00note")
     with pytest.raises(ValueError, match="too large"):
         store.update(saved.id, "hello", "merhaba", "x" * (vocabulary.MAX_NOTE_CHARS + 1))
 

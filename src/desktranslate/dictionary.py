@@ -89,6 +89,7 @@ def _safe_audio_url(value: object) -> str:
             or parsed.password is not None
             or parsed.fragment
             or parsed.query
+            or not parsed.path.startswith(_AUDIO_PREFIX)
             or _AUDIO_FILE_PATTERN.fullmatch(parsed.path[len(_AUDIO_PREFIX) :]) is None
         ):
             return ""

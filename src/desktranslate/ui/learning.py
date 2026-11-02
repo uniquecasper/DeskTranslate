@@ -254,7 +254,10 @@ class VocabularyReviewDialog(QDialog):
             f"{item.entry.source_language} → {item.entry.target_language}"
         )
         self.word_label.setText(item.entry.source)
-        self.answer_label.setText(item.entry.translation)
+        answer = item.entry.translation
+        if item.entry.note:
+            answer += "\\n\\nMy note:\\n" + item.entry.note
+        self.answer_label.setText(answer)
         self.answer_label.hide()
         self.show_answer_button.show()
         self.show_answer_button.setEnabled(True)
@@ -366,6 +369,7 @@ class LearningPage(QWidget):
         self.next_button = QPushButton("Next")
         self.delete_button = QPushButton("Delete selected")
         self.delete_button.setAccessibleName("Delete selected vocabulary entry")
+        self.delete_button.setEnabled(False)
         self.edit_button = QPushButton("Edit selected")
         self.edit_button.setAccessibleName("Edit selected vocabulary entry")
         self.edit_button.setEnabled(False)
@@ -514,7 +518,7 @@ class LearningPage(QWidget):
                 source_item = QTableWidgetItem(entry.source)
                 source_item.setData(Qt.ItemDataRole.UserRole, entry.id)
                 translation_item = QTableWidgetItem(entry.translation)
-                note_preview = entry.note.replace("\\n", " ↵ ")
+                note_preview = entry.note.replace("\n", " ↵ ")
                 if len(note_preview) > 100:
                     note_preview = note_preview[:97] + "…"
                 note_item = QTableWidgetItem(note_preview or "—")
@@ -551,7 +555,8 @@ class LearningPage(QWidget):
             self.review_button.setEnabled(False)
 
     def _update_selection_actions(self) -> None:
-        selected = self.table.currentRow() >= 0 and self.table.item(self.table.currentRow(), 0) is not None
+        row = self.table.currentRow()
+        selected = row >= 0 and self.table.item(row, 0) is not None
         self.delete_button.setEnabled(selected)
         self.edit_button.setEnabled(selected)
 
@@ -615,6 +620,7 @@ class LearningPage(QWidget):
                     if not needle
                     or needle in entry.source.casefold()
                     or needle in entry.translation.casefold()
+                    or needle in entry.note.casefold()
                 )
                 offset += len(page)
                 if len(page) < MAX_LIST_LIMIT:

@@ -19,7 +19,7 @@ from desktranslate.vocabulary import (
 
 MAX_EXPORT_BYTES = 24 * 1024 * 1024
 _REJECTED_CATEGORIES = frozenset({"Cc", "Zl", "Zp"})
-_BIDI_CONTROLS = frozenset("\\u202a\\u202b\\u202c\\u202d\\u202e\\u2066\\u2067\\u2068\\u2069")
+_BIDI_CONTROLS = frozenset("\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069")
 _HEADER = "#separator:Comma\n#html:false\n#columns:Front,Back,SourceLanguage,TargetLanguage\n"
 
 
@@ -28,7 +28,10 @@ def _validate_text(value: object, label: str, max_chars: int, max_bytes: int) ->
         raise ValueError(f"{label} must be non-empty text.")
     if len(value) > max_chars or len(value.encode("utf-8")) > max_bytes:
         raise ValueError(f"{label} exceeds the vocabulary size limit.")
-    if any(unicodedata.category(char) in _REJECTED_CATEGORIES or char in _BIDI_CONTROLS for char in value):
+    if any(
+        unicodedata.category(char) in _REJECTED_CATEGORIES or char in _BIDI_CONTROLS
+        for char in value
+    ):
         raise ValueError(f"{label} contains unsupported control characters.")
     # Refuse formula-like cells rather than changing the user's vocabulary.
     # This keeps exports safe to open in spreadsheet software as well as Anki.
@@ -69,9 +72,17 @@ def export_anki_csv(entries: Iterable[VocabularyEntry]) -> str:
             MAX_TRANSLATION_CHARS,
             MAX_TRANSLATION_BYTES,
         )
-        if not isinstance(entry.source_language, str) or entry.source_language not in REGISTRY or entry.source_language == "auto":
+        if (
+            not isinstance(entry.source_language, str)
+            or entry.source_language not in REGISTRY
+            or entry.source_language == "auto"
+        ):
             raise ValueError("The export contains an unsupported source language.")
-        if not isinstance(entry.target_language, str) or entry.target_language not in REGISTRY or entry.target_language == "auto":
+        if (
+            not isinstance(entry.target_language, str)
+            or entry.target_language not in REGISTRY
+            or entry.target_language == "auto"
+        ):
             raise ValueError("The export contains an unsupported target language.")
 
         row = _csv_row((source, translation, entry.source_language, entry.target_language))

@@ -7,7 +7,7 @@ from desktranslate.vocabulary import VocabularyEntry
 from desktranslate.vocabulary_exchange import export_anki_csv
 
 
-def entry(source="hello", translation="merhaba", source_language="en", target_language="tr"):
+def entry(source="hello", translation="merhaba", source_language="en", target_language="tr", note=""):
     return VocabularyEntry(
         id=1,
         source=source,
@@ -15,6 +15,7 @@ def entry(source="hello", translation="merhaba", source_language="en", target_la
         source_language=source_language,
         target_language=target_language,
         created_at="2026-11-02T00:00:00+00:00",
+        note=note,
     )
 
 
@@ -100,9 +101,7 @@ def test_export_includes_personal_notes_with_newlines():
         ]
     )
 
-    assert _data_rows(content) == [
-        ["hello", "merhaba", "en", "tr", "Greeting\nUse with friends."]
-    ]
+    assert _data_rows(content) == [["hello", "merhaba", "en", "tr", "Greeting\nUse with friends."]]
 
 
 def test_export_rejects_formula_like_personal_notes():

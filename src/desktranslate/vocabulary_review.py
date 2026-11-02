@@ -210,7 +210,7 @@ class VocabularyReviewStore:
                 SELECT
                     vocabulary.id, vocabulary.source, vocabulary.translation,
                     vocabulary.source_language, vocabulary.target_language,
-                    vocabulary.created_at,
+                    vocabulary.created_at, vocabulary.note,
                     review.entry_id, review.due_at, review.interval_days,
                     review.ease, review.repetitions, review.lapses,
                     review.last_reviewed_at
@@ -234,6 +234,7 @@ class VocabularyReviewStore:
                 source_language=str(row["source_language"]),
                 target_language=str(row["target_language"]),
                 created_at=str(row["created_at"]),
+                note=str(row["note"]),
             )
             if row["entry_id"] is None:
                 state = ReviewState(

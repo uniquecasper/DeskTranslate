@@ -54,10 +54,7 @@ def export_anki_csv(entries: Iterable[VocabularyEntry]) -> str:
     """
     chunks = [_HEADER]
     size = len(_HEADER.encode("utf-8"))
-    count = 0
-
-    for entry in entries:
-        count += 1
+    for count, entry in enumerate(entries, start=1):
         if count > MAX_ENTRIES:
             raise ValueError("Too many vocabulary entries for one export.")
         if not isinstance(entry, VocabularyEntry):

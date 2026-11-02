@@ -10,6 +10,8 @@ from collections.abc import Iterable
 from desktranslate.languages import REGISTRY
 from desktranslate.vocabulary import (
     MAX_ENTRIES,
+    MAX_NOTE_BYTES,
+    MAX_NOTE_CHARS,
     MAX_SOURCE_BYTES,
     MAX_SOURCE_CHARS,
     MAX_TRANSLATION_BYTES,
@@ -20,7 +22,7 @@ from desktranslate.vocabulary import (
 MAX_EXPORT_BYTES = 24 * 1024 * 1024
 _REJECTED_CATEGORIES = frozenset({"Cc", "Zl", "Zp"})
 _BIDI_CONTROLS = frozenset("\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069")
-_HEADER = "#separator:Comma\n#html:false\n#columns:Front,Back,SourceLanguage,TargetLanguage\n"
+_HEADER = "#separator:Comma\n#html:false\n#columns:Front,Back,SourceLanguage,TargetLanguage,Notes\n"
 
 
 def _validate_text(value: object, label: str, max_chars: int, max_bytes: int) -> str:
@@ -39,6 +41,25 @@ def _validate_text(value: object, label: str, max_chars: int, max_bytes: int) ->
         raise ValueError(
             f"{label} begins with a spreadsheet formula marker. "
             "Edit that saved term before exporting it."
+        )
+    return value
+
+
+def _validate_note(value: object) -> str:
+    if not isinstance(value, str):
+        raise ValueError("Personal note must be text.")
+    if len(value) > MAX_NOTE_CHARS or len(value.encode("utf-8")) > MAX_NOTE_BYTES:
+        raise ValueError("Personal note exceeds the saved vocabulary size limit.")
+    if any(
+        (unicodedata.category(char) == "Cc" and char not in {"\n", "\t"})
+        or char in _BIDI_CONTROLS
+        or unicodedata.category(char) in {"Zl", "Zp"}
+        for char in value
+    ):
+        raise ValueError("Personal note contains unsupported control characters.")
+    if value.lstrip().startswith(("=", "+", "-", "@")):
+        raise ValueError(
+            "Personal note begins with a spreadsheet formula marker. Edit it before exporting."
         )
     return value
 
@@ -87,7 +108,8 @@ def export_anki_csv(entries: Iterable[VocabularyEntry]) -> str:
         ):
             raise ValueError("The export contains an unsupported target language.")
 
-        row = _csv_row((source, translation, entry.source_language, entry.target_language))
+        note = _validate_note(entry.note)
+        row = _csv_row((source, translation, entry.source_language, entry.target_language, note))
         size += len(row.encode("utf-8"))
         if size > MAX_EXPORT_BYTES:
             raise ValueError("The export is too large. Apply a language filter and try again.")

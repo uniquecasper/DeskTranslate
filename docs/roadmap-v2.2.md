@@ -18,7 +18,7 @@ Architecture and privacy constraints are documented in [architecture](architectu
 ## A. Reliability and speed — first
 
 - [x] Instrument capture → OCR → stabilization → provider → overlay latency. Expose the latest stage timings in the translation status tooltip and rolling percentiles in user-requested diagnostics; never store screen text.
-- [ ] Reduce redundant OCR/provider work using existing bounded mailboxes and caches; preserve cancellation and stale-result rejection.
+- [x] Reduce redundant OCR/provider work using existing bounded mailboxes and caches; preserve cancellation and stale-result rejection. Regression coverage confirms repeated OCR during background motion does not duplicate provider calls for unchanged subtitles, while genuinely changed text is still translated.
 - [ ] Ensure accepted live translations appear automatically and recover cleanly after provider/OCR failures. Remove dead or misleading controls.
 - [ ] Add configurable capture/translation pacing and per-stage timeouts with safe defaults.
 - [ ] Add regressions for moving subtitles, static text, blank transitions, overlay self-capture, window movement/minimize/occlusion, pause/resume and provider failures.

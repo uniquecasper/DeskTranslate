@@ -265,8 +265,7 @@ class WindowCapture:
                 current is not None
                 and (current.handle, current.pid) == self.identity
                 and current.executable_hash == self.binding.get("executable_hash")
-                and current.executable.casefold()
-                == self.binding.get("executable", "").casefold()
+                and current.executable.casefold() == self.binding.get("executable", "").casefold()
             ):
                 return current
             if not self.follow_restart:

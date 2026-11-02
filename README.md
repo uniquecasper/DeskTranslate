@@ -6,7 +6,7 @@
 
 Translate the dialogue in a game, subtitles in a video, a menu, or text in an image. Press a shortcut, select a region, and read the translation in a quiet, customizable overlay.
 
-[Release readiness](docs/release-readiness.md) · [Acceptance matrix](docs/validation.md) · [Non-invasive testing](docs/testing.md) · [Published releases](https://github.com/uniquecasper/DeskTranslate/releases) · [Getting started](#your-first-translation) · [Upgrade guide](docs/upgrade.md)
+[2.2+ roadmap](docs/roadmap-v2.2.md) · [Release readiness](docs/release-readiness.md) · [Acceptance matrix](docs/validation.md) · [Non-invasive testing](docs/testing.md) · [Published releases](https://github.com/uniquecasper/DeskTranslate/releases) · [Getting started](#your-first-translation) · [Upgrade guide](docs/upgrade.md)
 
 **DeskTranslate 2.1.0** adds selected-word dictionary details, source-code protection and spaced-repetition vocabulary review to the rebuilt Windows screen translator. [Download the Windows release](https://github.com/uniquecasper/DeskTranslate/releases/tag/v2.1.0). Release files include Sigstore signatures and GitHub attestations; they are not Authenticode publisher-signed, so Windows may show a SmartScreen warning.
 

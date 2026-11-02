@@ -18,6 +18,8 @@ from desktranslate.vocabulary import (
 )
 
 MAX_EXPORT_BYTES = 24 * 1024 * 1024
+_REJECTED_CATEGORIES = frozenset({"Cc", "Zl", "Zp"})
+_BIDI_CONTROLS = frozenset("\\u202a\\u202b\\u202c\\u202d\\u202e\\u2066\\u2067\\u2068\\u2069")
 _HEADER = "#separator:Comma\n#html:false\n#columns:Front,Back,SourceLanguage,TargetLanguage\n"
 
 
@@ -26,14 +28,14 @@ def _validate_text(value: object, label: str, max_chars: int, max_bytes: int) ->
         raise ValueError(f"{label} must be non-empty text.")
     if len(value) > max_chars or len(value.encode("utf-8")) > max_bytes:
         raise ValueError(f"{label} exceeds the vocabulary size limit.")
-    if any(unicodedata.category(char).startswith("C") for char in value):
+    if any(unicodedata.category(char) in _REJECTED_CATEGORIES or char in _BIDI_CONTROLS for char in value):
         raise ValueError(f"{label} contains unsupported control characters.")
     # Refuse formula-like cells rather than changing the user's vocabulary.
     # This keeps exports safe to open in spreadsheet software as well as Anki.
     if value.lstrip().startswith(("=", "+", "-", "@")):
         raise ValueError(
             f"{label} begins with a spreadsheet formula marker. "
-            "Edit that saved term before exporting, or use a non-spreadsheet format."
+            "Edit that saved term before exporting it."
         )
     return value
 

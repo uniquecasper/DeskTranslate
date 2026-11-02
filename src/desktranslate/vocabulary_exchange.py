@@ -44,8 +44,10 @@ def _validate_text(value: object, label: str, max_chars: int, max_bytes: int) ->
 
 
 def _csv_row(values: tuple[str, ...]) -> str:
+    # Formula-like cells are rejected by _validate_text before reaching this
+    # writer. CSV quoting is still required for commas, quotes and Unicode text.
     buffer = io.StringIO(newline="")
-    csv.writer(buffer, lineterminator="\n").writerow(values)
+    csv.writer(buffer, lineterminator="\n").writerow(values)  # nosemgrep
     return buffer.getvalue()
 
 

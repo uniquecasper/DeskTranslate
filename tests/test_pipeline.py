@@ -3,7 +3,9 @@ from queue import Empty
 from threading import Event
 
 import pytest
-from PIL import Image
+from PIL import Image, ImageDraw
+
+from desktranslate.algorithms import FrameGate
 
 from desktranslate.models import Capabilities, OCRResult, SessionState, TranslationResult
 from desktranslate.pipeline import LatestMailbox, Pipeline, Session
@@ -768,3 +770,21 @@ def test_conventional_glossary_is_exact_and_language_scoped(text, target, expect
         assert pipeline.counters["glossary_hits"] == (not calls)
     finally:
         pipeline.stop()
+
+
+def test_frame_gate_detects_short_text_after_early_rgb_reduction():
+    baseline = Image.new("RGB", (1920, 1080), (16, 16, 16))
+    changed = baseline.copy()
+    # A compact, high-contrast subtitle stroke occupies only a few preview pixels.
+    ImageDraw.Draw(changed).rectangle((500, 500, 560, 504), fill=(240, 240, 240))
+
+    gate = FrameGate(settle=0.0)
+    first = gate.observe(baseline, 0.0)
+    second = gate.observe(changed, 0.1)
+
+    assert first.ready
+    assert second.changed
+    assert second.ready
+    # Sampling must not mutate the original image that is later passed to OCR.
+    assert baseline.getpixel((500, 500)) == (16, 16, 16)
+    assert changed.getpixel((500, 500)) == (240, 240, 240)

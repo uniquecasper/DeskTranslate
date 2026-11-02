@@ -99,13 +99,15 @@ def _note(value: object) -> str:
     if len(value) > MAX_NOTE_CHARS * 4:
         raise ValueError("Personal note is too large.")
     value = unicodedata.normalize("NFC", value.replace("\r\n", "\n").replace("\r", "\n")).strip()
-    if len(value) > MAX_NOTE_CHARS or any(
+    if len(value) > MAX_NOTE_CHARS:
+        raise ValueError("Personal note is too large.")
+    if any(
         (unicodedata.category(character) == "Cc" and character not in {"\n", "\t"})
         or character in _BIDI_CONTROLS
         or unicodedata.category(character) in {"Zl", "Zp"}
         for character in value
     ):
-        raise ValueError("Personal note contains unsupported control characters or is too long.")
+        raise ValueError("Personal note contains unsupported control characters.")
     try:
         encoded = value.encode("utf-8")
     except UnicodeEncodeError:

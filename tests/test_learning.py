@@ -256,12 +256,12 @@ def test_review_dialog_reveals_personal_note_with_the_answer(learning_page):
     from desktranslate.ui.learning import VocabularyReviewDialog
 
     page, store = learning_page
-    entry = store.add("hello", "merhaba", "en", "tr", "A greeting\\nUse with friends.")
+    entry = store.add("hello", "merhaba", "en", "tr", "A greeting\nUse with friends.")
     dialog = VocabularyReviewDialog(page.review_store.due_entries(), page.review_store)
 
     dialog.show_answer()
 
-    assert dialog.answer_label.text() == "merhaba\\n\\nMy note:\\nA greeting\\nUse with friends."
+    assert dialog.answer_label.text() == "merhaba\n\nMy note:\nA greeting\nUse with friends."
     dialog.deleteLater()
 
 

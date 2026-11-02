@@ -51,7 +51,7 @@ def _validate_note(value: object) -> str:
     if len(value) > MAX_NOTE_CHARS or len(value.encode("utf-8")) > MAX_NOTE_BYTES:
         raise ValueError("Personal note exceeds the saved vocabulary size limit.")
     if any(
-        (unicodedata.category(char) == "Cc" and char not in {"\\n", "\\t"})
+        (unicodedata.category(char) == "Cc" and char not in {"\n", "\t"})
         or char in _BIDI_CONTROLS
         or unicodedata.category(char) in {"Zl", "Zp"}
         for char in value

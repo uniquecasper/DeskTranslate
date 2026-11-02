@@ -116,7 +116,7 @@ def test_exact_duplicate_is_idempotent_but_different_translation_is_allowed(tmp_
 
 @pytest.mark.parametrize(
     "note",
-    [None, 1, "bad\\x00note", "abc\\u202edef", "x" * (vocabulary.MAX_NOTE_CHARS + 1)],
+    [None, 1, "bad\x00note", "abc\u202edef", "x" * (vocabulary.MAX_NOTE_CHARS + 1)],
 )
 def test_add_rejects_invalid_personal_notes(store, note):
     with pytest.raises(ValueError, match="Personal note"):

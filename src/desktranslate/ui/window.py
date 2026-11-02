@@ -985,14 +985,19 @@ class MainWindow(QMainWindow):
             sections.append(f"Meaning ({target_name}): unavailable")
 
         if dictionary_entry is not None:
-            sections.append("English explanation and example:")
-            for index, sense in enumerate(dictionary_entry.senses, start=1):
-                heading = (
-                    f"{index}. {sense.part_of_speech}" if sense.part_of_speech else f"{index}."
-                )
-                sections.append(f"{heading} {sense.definition}")
-                if sense.example:
-                    sections.append(f"Example: {sense.example}")
+            if dictionary_entry.phonetic:
+                sections.append(f"Pronunciation (IPA): {dictionary_entry.phonetic}")
+            if dictionary_entry.senses:
+                sections.append("English explanation and example:")
+                for index, sense in enumerate(dictionary_entry.senses, start=1):
+                    heading = (
+                        f"{index}. {sense.part_of_speech}" if sense.part_of_speech else f"{index}."
+                    )
+                    sections.append(f"{heading} {sense.definition}")
+                    if sense.example:
+                        sections.append(f"Example: {sense.example}")
+            elif dictionary_entry.phonetic or dictionary_entry.audio_urls:
+                sections.append("English definition/example: unavailable.")
         elif source_language == "en":
             sections.append(
                 "English definition/example: unavailable. The public dictionary service "
@@ -1030,9 +1035,20 @@ class MainWindow(QMainWindow):
         save_button = None
         if translation:
             save_button = dialog.addButton("Save to Learning", QMessageBox.ButtonRole.AcceptRole)
+        audio_button = None
+        if dictionary_entry is not None and dictionary_entry.audio_urls:
+            audio_button = dialog.addButton(
+                "Open pronunciation audio", QMessageBox.ButtonRole.ActionRole
+            )
         dialog.addButton(QMessageBox.StandardButton.Close)
         dialog.exec()
-        if save_button is None or dialog.clickedButton() is not save_button:
+        clicked_button = dialog.clickedButton()
+        if audio_button is not None and clicked_button is audio_button and dictionary_entry is not None:
+            opened = QDesktopServices.openUrl(QUrl(dictionary_entry.audio_urls[0]))
+            if not opened:
+                self.notice("The pronunciation audio link could not be opened.")
+            return
+        if save_button is None or clicked_button is not save_button:
             return
 
         from desktranslate.ui.learning import VocabularySaveDialog

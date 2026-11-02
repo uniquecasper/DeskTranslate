@@ -242,21 +242,46 @@ class WindowCapture:
         self.rebound = False
 
     def resolve(self) -> WindowInfo:
-        windows = [
-            w
-            for w in self.inspector.windows()
-            if w.executable_hash == self.binding.get("executable_hash")
-            and w.executable.casefold() == self.binding.get("executable", "").casefold()
-        ]
+        visible_windows: list[WindowInfo] | None = None
         if self.identity is not None:
-            exact = next((w for w in windows if (w.handle, w.pid) == self.identity), None)
-            if exact:
-                return exact
+            # A bound HWND/PID is already a strong identity. Verify that exact
+            # window directly instead of enumerating every visible process on
+            # every capture tick. Custom inspectors without info() retain the
+            # original enumeration-based compatibility path.
+            inspect = getattr(self.inspector, "info", None)
+            if callable(inspect):
+                current = inspect(self.identity[0])
+            else:
+                visible_windows = self.inspector.windows()
+                current = next(
+                    (
+                        window
+                        for window in visible_windows
+                        if (window.handle, window.pid) == self.identity
+                    ),
+                    None,
+                )
+            if (
+                current is not None
+                and (current.handle, current.pid) == self.identity
+                and current.executable_hash == self.binding.get("executable_hash")
+                and current.executable.casefold() == self.binding.get("executable", "").casefold()
+            ):
+                return current
             if not self.follow_restart:
                 raise TargetUnavailableError(
                     "The chosen application closed. Select its new window to continue."
                 )
-        matches = [w for w in windows if w.title == self.binding.get("title")]
+
+        if visible_windows is None:
+            visible_windows = self.inspector.windows()
+        windows = [
+            window
+            for window in visible_windows
+            if window.executable_hash == self.binding.get("executable_hash")
+            and window.executable.casefold() == self.binding.get("executable", "").casefold()
+        ]
+        matches = [window for window in windows if window.title == self.binding.get("title")]
         if len(matches) != 1:
             raise TargetUnavailableError(
                 "The chosen window is missing or ambiguous. Restore it, or select it again."

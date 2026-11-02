@@ -6,7 +6,6 @@ import pytest
 from PIL import Image, ImageDraw
 
 from desktranslate.algorithms import FrameGate
-
 from desktranslate.models import Capabilities, OCRResult, SessionState, TranslationResult
 from desktranslate.pipeline import LatestMailbox, Pipeline, Session
 from desktranslate.settings import Settings

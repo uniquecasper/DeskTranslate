@@ -8,17 +8,28 @@ The endpoint is optional enrichment; translation still works when it is down.
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import dataclass
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 
 import httpx
 
 MAX_WORD_CHARS = 100
 MAX_RESPONSE_BYTES = 512 * 1024
 MAX_SENSES = 4
+MAX_PHONETIC_CHARS = 100
+MAX_AUDIO_URLS = 3
 REQUEST_TIMEOUT_SECONDS = 4.0
 _ENDPOINT = "https://api.dictionaryapi.dev/api/v2/entries/en/"
+_AUDIO_HOST = "api.dictionaryapi.dev"
+_AUDIO_PREFIX = "/media/pronunciations/en/"
+_AUDIO_FILE_PATTERN = re.compile(
+    r"[A-Za-z0-9][A-Za-z0-9._-]{0,150}\.(?:mp3|ogg|wav)\Z",
+    re.IGNORECASE,
+)
 _WORD_PATTERN = re.compile(r"[^\W_]+(?:[-'][^\W_]+)*", re.UNICODE)
+_REJECTED_CATEGORIES = frozenset({"Cc", "Cf", "Zl", "Zp"})
+_BIDI_CONTROLS = frozenset("\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069")
 
 
 class DictionaryLookupError(RuntimeError):
@@ -39,12 +50,57 @@ class EnglishDictionaryEntry:
     source_urls: tuple[str, ...]
     license_name: str
     license_url: str
+    phonetic: str = ""
+    audio_urls: tuple[str, ...] = ()
+
+
+def _phonetic_text(value: object) -> str:
+    if not isinstance(value, str):
+        return ""
+    value = value.strip()
+    if (
+        not value
+        or len(value) > MAX_PHONETIC_CHARS
+        or any(
+            unicodedata.category(character) in _REJECTED_CATEGORIES or character in _BIDI_CONTROLS
+            for character in value
+        )
+    ):
+        return ""
+    try:
+        value.encode("utf-8")
+    except UnicodeEncodeError:
+        return ""
+    return value
+
+
+def _safe_audio_url(value: object) -> str:
+    """Accept only bounded Free Dictionary pronunciation media URLs."""
+    if not isinstance(value, str) or not value or len(value) > 2048:
+        return ""
+    try:
+        parsed = urlsplit(value)
+        if (
+            parsed.scheme != "https"
+            or parsed.hostname != _AUDIO_HOST
+            or parsed.port is not None
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.fragment
+            or parsed.query
+            or not parsed.path.startswith(_AUDIO_PREFIX)
+            or _AUDIO_FILE_PATTERN.fullmatch(parsed.path[len(_AUDIO_PREFIX) :]) is None
+        ):
+            return ""
+    except ValueError:
+        return ""
+    return value
 
 
 def lookup_english_word(
     word: str, *, timeout: float = REQUEST_TIMEOUT_SECONDS
 ) -> EnglishDictionaryEntry | None:
-    """Return a few bounded English senses, or None when the word is not found."""
+    """Return bounded meanings/pronunciation, or None when the word is not found."""
     if not isinstance(word, str):
         raise ValueError("Dictionary lookup requires text.")
     normalized = word.strip()
@@ -83,9 +139,11 @@ def lookup_english_word(
 
     senses: list[DictionarySense] = []
     source_urls: list[str] = []
+    audio_urls: list[str] = []
     license_name = ""
     license_url = ""
     response_word = normalized
+    phonetic = ""
 
     for item in payload[:3]:
         if not isinstance(item, dict):
@@ -93,6 +151,22 @@ def lookup_english_word(
         candidate_word = item.get("word")
         if isinstance(candidate_word, str) and candidate_word.strip():
             response_word = candidate_word.strip()[:MAX_WORD_CHARS]
+
+        if not phonetic:
+            phonetic = _phonetic_text(item.get("phonetic"))
+
+        phonetics = item.get("phonetics")
+        if isinstance(phonetics, list):
+            for phonetic_item in phonetics[:8]:
+                if not isinstance(phonetic_item, dict):
+                    continue
+                if not phonetic:
+                    phonetic = _phonetic_text(phonetic_item.get("text"))
+                audio_url = _safe_audio_url(phonetic_item.get("audio"))
+                if audio_url and audio_url not in audio_urls and len(audio_urls) < MAX_AUDIO_URLS:
+                    audio_urls.append(audio_url)
+                if len(audio_urls) >= MAX_AUDIO_URLS:
+                    break
 
         sources = item.get("sourceUrls")
         if isinstance(sources, list):
@@ -148,7 +222,7 @@ def lookup_english_word(
         if len(senses) >= MAX_SENSES:
             break
 
-    if not senses:
+    if not senses and not phonetic and not audio_urls:
         return None
     return EnglishDictionaryEntry(
         word=response_word,
@@ -156,4 +230,6 @@ def lookup_english_word(
         source_urls=tuple(source_urls),
         license_name=license_name,
         license_url=license_url,
+        phonetic=phonetic,
+        audio_urls=tuple(audio_urls),
     )

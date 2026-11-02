@@ -133,3 +133,74 @@ def test_lookup_ignores_untrusted_non_https_source_and_license_urls(monkeypatch)
     assert result.source_urls == ()
     assert result.license_name == "Some license"
     assert result.license_url == ""
+
+
+def test_lookup_extracts_bounded_ipa_and_only_trusted_audio_urls(monkeypatch):
+    payload = _entry_response()
+    payload[0]["phonetic"] = "/rʌn/"
+    payload[0]["phonetics"] = [
+        {
+            "text": "/rʌn/",
+            "audio": "https://api.dictionaryapi.dev/media/pronunciations/en/run-uk.mp3",
+        },
+        {
+            "text": "/rʌn/",
+            "audio": "https://api.dictionaryapi.dev/media/pronunciations/en/run-us.ogg",
+        },
+        {"audio": "https://api.dictionaryapi.dev/media/pronunciations/en/run-au.wav"},
+        {"audio": "https://api.dictionaryapi.dev/media/pronunciations/en/run-extra.mp3"},
+        {"audio": "https://evil.invalid/media/pronunciations/en/run.mp3"},
+        {"audio": "http://api.dictionaryapi.dev/media/pronunciations/en/run.mp3"},
+        {"audio": "https://api.dictionaryapi.dev/media/pronunciations/en/../run.mp3"},
+        {
+            "audio": "https://api.dictionaryapi.dev/media/pronunciations/en/run.mp3?redirect=https%3A%2F%2Fevil.invalid"
+        },
+        {"audio": "javascript:alert(1)"},
+    ]
+    monkeypatch.setattr(
+        "desktranslate.dictionary.httpx.get",
+        lambda *_args, **_kwargs: httpx.Response(200, json=payload),
+    )
+
+    result = lookup_english_word("run")
+
+    assert result is not None
+    assert result.phonetic == "/rʌn/"
+    assert result.audio_urls == (
+        "https://api.dictionaryapi.dev/media/pronunciations/en/run-uk.mp3",
+        "https://api.dictionaryapi.dev/media/pronunciations/en/run-us.ogg",
+        "https://api.dictionaryapi.dev/media/pronunciations/en/run-au.wav",
+    )
+
+
+def test_lookup_uses_phonetic_array_text_when_top_level_value_is_invalid(monkeypatch):
+    payload = _entry_response()
+    payload[0]["phonetic"] = "bad\nvalue"
+    payload[0]["phonetics"] = [{"text": "/rʌn/"}]
+    monkeypatch.setattr(
+        "desktranslate.dictionary.httpx.get",
+        lambda *_args, **_kwargs: httpx.Response(200, json=payload),
+    )
+
+    result = lookup_english_word("run")
+
+    assert result is not None
+    assert result.phonetic == "/rʌn/"
+
+
+def test_lookup_can_return_audio_without_a_definition(monkeypatch):
+    audio = "https://api.dictionaryapi.dev/media/pronunciations/en/hello-us.mp3"
+    monkeypatch.setattr(
+        "desktranslate.dictionary.httpx.get",
+        lambda *_args, **_kwargs: httpx.Response(
+            200,
+            json=[{"word": "hello", "phonetics": [{"audio": audio}]}],
+        ),
+    )
+
+    result = lookup_english_word("hello")
+
+    assert result is not None
+    assert result.senses == ()
+    assert result.audio_urls == (audio,)
+    assert result.phonetic == ""

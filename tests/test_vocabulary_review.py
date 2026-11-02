@@ -34,7 +34,6 @@ def test_new_words_are_due_without_changing_existing_vocabulary_rows(stores):
     assert review.state(first.id) is None
 
 
-
 def test_due_review_queue_keeps_personal_note_after_reopening_store(stores):
     vocabulary, review = stores
     entry = vocabulary.add("hello", "merhaba", "en", "tr", "A greeting to friends.")

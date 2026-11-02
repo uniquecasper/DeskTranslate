@@ -72,7 +72,7 @@ def test_export_rejects_invalid_vocabulary_text(value):
 
 def test_export_preserves_legitimate_zero_width_joiners():
     assert _data_rows(export_anki_csv([entry(source="می\u200cخواهم", source_language="fa")])) == [
-        ["می\u200cخواهم", "merhaba", "fa", "tr"]
+        ["می\u200cخواهم", "merhaba", "fa", "tr", ""]
     ]
 
 

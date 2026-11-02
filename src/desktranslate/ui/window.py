@@ -1040,7 +1040,9 @@ class MainWindow(QMainWindow):
             audio_button = dialog.addButton(
                 "Open pronunciation audio", QMessageBox.ButtonRole.ActionRole
             )
-            audio_button.clicked.connect(lambda _checked=False: self.open_pronunciation_audio(audio_url))
+            audio_button.clicked.connect(
+                lambda _checked=False: self.open_pronunciation_audio(audio_url)
+            )
         dialog.addButton(QMessageBox.StandardButton.Close)
         dialog.exec()
         if save_button is None or dialog.clickedButton() is not save_button:

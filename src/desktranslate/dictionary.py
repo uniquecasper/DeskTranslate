@@ -62,8 +62,7 @@ def _phonetic_text(value: object) -> str:
         not value
         or len(value) > MAX_PHONETIC_CHARS
         or any(
-            unicodedata.category(character) in _REJECTED_CATEGORIES
-            or character in _BIDI_CONTROLS
+            unicodedata.category(character) in _REJECTED_CATEGORIES or character in _BIDI_CONTROLS
             for character in value
         )
     ):

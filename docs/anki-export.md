@@ -11,4 +11,4 @@ The file is UTF-8 CSV with Anki text-import metadata for column names and comma 
 
 The export includes source term, translation, the two language codes and your optional personal note. It does not include database IDs, timestamps, credentials or spaced-repetition scheduling data. It is created only after you explicitly select the export action and choose a file location.
 
-To reduce spreadsheet formula-injection risk, formula-like terms beginning with `=`, `+`, `-` or `@` are rejected rather than silently changed. Edit the saved term before exporting it. The export does not modify or delete your DeskTranslate vocabulary.
+To reduce spreadsheet formula-injection risk, formula-like terms or notes beginning with `=`, `+`, `-` or `@` are rejected rather than silently changed. Edit the saved term before exporting it. The export does not modify or delete your DeskTranslate vocabulary.

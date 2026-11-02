@@ -43,10 +43,7 @@ def test_export_preserves_unicode_commas_quotes_and_multiple_language_pairs():
 
 
 def test_empty_export_contains_valid_anki_column_metadata():
-    assert export_anki_csv([]) == (
-        "#separator:Comma\n#html:false\n"
-        "#columns:Front,Back,SourceLanguage,TargetLanguage\n"
-    )
+    assert export_anki_csv([]) == "#separator:Comma\n#html:false\n#columns:Front,Back,SourceLanguage,TargetLanguage\n"
 
 
 @pytest.mark.parametrize("term", ["=1+1", " +SUM(A1:A2)", "-cmd", "@SUM(1,2)"])

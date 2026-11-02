@@ -7,7 +7,13 @@ from desktranslate.vocabulary import VocabularyEntry
 from desktranslate.vocabulary_exchange import export_anki_csv
 
 
-def entry(source="hello", translation="merhaba", source_language="en", target_language="tr", note=""):
+def entry(
+    source="hello",
+    translation="merhaba",
+    source_language="en",
+    target_language="tr",
+    note="",
+):
     return VocabularyEntry(
         id=1,
         source=source,

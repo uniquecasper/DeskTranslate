@@ -253,14 +253,14 @@ def test_review_dialog_reveals_answer_and_records_explicit_rating(
 
 def test_learning_search_finds_personal_notes_and_displays_them(learning_page):
     page, store = learning_page
-    store.add("hello", "merhaba", "en", "tr", "Friendly greeting\\nUsed with friends")
+    store.add("hello", "merhaba", "en", "tr", "Friendly greeting\nUsed with friends")
 
     page.search_edit.setText("FRIENDLY")
     page.search()
 
     assert page.match_count == 1
     assert page.table.item(0, 2).text() == "Friendly greeting ↵ Used with friends"
-    assert page.table.item(0, 2).toolTip() == "Friendly greeting\\nUsed with friends"
+    assert page.table.item(0, 2).toolTip() == "Friendly greeting\nUsed with friends"
 
 
 def test_vocabulary_edit_dialog_round_trips_multiline_note(headless_application, tmp_path):
@@ -271,9 +271,9 @@ def test_vocabulary_edit_dialog_round_trips_multiline_note(headless_application,
     assert dialog.values() == ("hello", "merhaba", "Original note")
     dialog.source_edit.setText("hi")
     dialog.translation_edit.setText("selam")
-    dialog.note_edit.setPlainText("New example\\nSecond line")
+    dialog.note_edit.setPlainText("New example\nSecond line")
 
-    assert dialog.values() == ("hi", "selam", "New example\\nSecond line")
+    assert dialog.values() == ("hi", "selam", "New example\nSecond line")
     dialog.deleteLater()
     headless_application.processEvents()
 
@@ -290,7 +290,7 @@ def test_edit_selected_persists_source_meaning_and_note(learning_page, monkeypat
     def accept_edit(dialog):
         dialog.source_edit.setText("hello")
         dialog.translation_edit.setText("merhaba")
-        dialog.note_edit.setPlainText("Greeting\\nUse with friends.")
+        dialog.note_edit.setPlainText("Greeting\nUse with friends.")
         return QDialog.DialogCode.Accepted
 
     monkeypatch.setattr(VocabularyEditDialog, "exec", accept_edit)
@@ -301,7 +301,7 @@ def test_edit_selected_persists_source_meaning_and_note(learning_page, monkeypat
     assert (updated.source, updated.translation, updated.note) == (
         "hello",
         "merhaba",
-        "Greeting\\nUse with friends.",
+        "Greeting\nUse with friends.",
     )
-    assert page.table.item(0, 2).toolTip() == "Greeting\\nUse with friends."
+    assert page.table.item(0, 2).toolTip() == "Greeting\nUse with friends."
     assert page.status_label.text() == "Saved vocabulary changes locally."

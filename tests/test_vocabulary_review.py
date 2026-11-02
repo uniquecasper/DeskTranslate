@@ -147,7 +147,7 @@ def test_review_batch_limit_is_bounded(stores):
         review.due_entries(limit=101)
 
 
-def test_review_table_creation_preserves_version_one_database(tmp_path):
+def test_review_table_creation_preserves_vocabulary_database_and_adds_note_schema(tmp_path):
     path = tmp_path / "vocabulary.sqlite3"
     vocabulary = VocabularyStore(path)
     entry = vocabulary.add("kept", "korundu", "en", "tr")
@@ -163,7 +163,8 @@ def test_review_table_creation_preserves_version_one_database(tmp_path):
     finally:
         connection.close()
 
-    assert version == 1
+    assert version == 2
+    assert entry.note == ""
     assert "vocabulary_entries" in tables
     assert "vocabulary_review_state" in tables
     assert vocabulary.get(entry.id) == entry

@@ -582,7 +582,10 @@ class LearningPage(QWidget):
             self.refresh()
             for visible_row in range(self.table.rowCount()):
                 visible_item = self.table.item(visible_row, 0)
-                if visible_item is not None and visible_item.data(Qt.ItemDataRole.UserRole) == updated.id:
+                if (
+                    visible_item is not None
+                    and visible_item.data(Qt.ItemDataRole.UserRole) == updated.id
+                ):
                     self.table.setCurrentCell(visible_row, 0)
                     break
             self.status_label.setText("Saved vocabulary changes locally.")

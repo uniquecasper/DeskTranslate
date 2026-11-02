@@ -67,6 +67,12 @@ def test_export_rejects_invalid_vocabulary_text(value):
         export_anki_csv([entry(source=value)])
 
 
+def test_export_preserves_legitimate_zero_width_joiners():
+    assert _data_rows(export_anki_csv([entry(source="می\u200cخواهم")])) == [
+        ["می\u200cخواهم", "merhaba", "en", "tr"]
+    ]
+
+
 def test_export_does_not_include_ids_timestamps_or_review_schedule():
     content = export_anki_csv([entry()])
 

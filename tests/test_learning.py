@@ -250,7 +250,6 @@ def test_review_dialog_reveals_answer_and_records_explicit_rating(
     headless_application.processEvents()
 
 
-
 def test_review_dialog_reveals_personal_note_with_the_answer(learning_page):
     from desktranslate.ui.learning import VocabularyReviewDialog
 

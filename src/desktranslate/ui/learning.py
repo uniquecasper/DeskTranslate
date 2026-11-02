@@ -16,8 +16,8 @@ from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
     QDialogButtonBox,
-    QFormLayout,
     QFileDialog,
+    QFormLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -38,8 +38,8 @@ from desktranslate.vocabulary import (
     VocabularyEntry,
     VocabularyStore,
 )
-from desktranslate.vocabulary_review import ReviewItem, VocabularyReviewStore
 from desktranslate.vocabulary_exchange import export_anki_csv
+from desktranslate.vocabulary_review import ReviewItem, VocabularyReviewStore
 
 
 class VocabularySaveDialog(QDialog):
@@ -236,7 +236,7 @@ class VocabularyReviewDialog(QDialog):
 
 
 class LearningPage(QWidget):
-    """Review and search explicitly saved terms without exporting them."""
+    """Review, search and explicitly export user-saved vocabulary."""
 
     PAGE_SIZE = 100
 

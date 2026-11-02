@@ -131,9 +131,7 @@ class VocabularyEditDialog(QDialog):
         self.setMinimumWidth(460)
         layout = QVBoxLayout(self)
         layout.addWidget(
-            QLabel(
-                f"Local vocabulary · {entry.source_language} → {entry.target_language}"
-            )
+            QLabel(f"Local vocabulary · {entry.source_language} → {entry.target_language}")
         )
 
         form = QFormLayout()

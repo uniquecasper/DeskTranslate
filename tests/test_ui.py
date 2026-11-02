@@ -580,7 +580,7 @@ def test_double_clicking_a_recognized_word_emits_the_selected_word(window):
     assert activated == [word]
 
 
-def test_dictionary_dialog_shows_meaning_definition_example_and_attribution(window, monkeypatch):
+def test_dictionary_dialog_shows_meaning_definition_pronunciation_and_audio(window, monkeypatch):
     from PySide6.QtCore import Qt
     from PySide6.QtWidgets import QMessageBox
 
@@ -591,7 +591,12 @@ def test_dictionary_dialog_shows_meaning_definition_example_and_attribution(wind
         QMessageBox,
         "exec",
         lambda dialog: captured.append(
-            (dialog.text(), dialog.informativeText(), dialog.textFormat())
+            (
+                dialog.text(),
+                dialog.informativeText(),
+                dialog.textFormat(),
+                [button.text() for button in dialog.buttons()],
+            )
         ),
     )
 
@@ -606,16 +611,61 @@ def test_dictionary_dialog_shows_meaning_definition_example_and_attribution(wind
             ("https://en.wiktionary.org/wiki/run",),
             "CC BY-SA 3.0",
             "https://creativecommons.org/licenses/by-sa/3.0/",
+            phonetic="/rʌn/",
+            audio_urls=("https://api.dictionaryapi.dev/media/pronunciations/en/run-us.mp3",),
         ),
     )
 
     assert len(captured) == 1
-    body, attribution, text_format = captured[0]
+    body, attribution, text_format, buttons = captured[0]
     assert text_format == Qt.TextFormat.PlainText
     assert "Meaning (Turkish):" in body
     assert "koşmak" in body
+    assert "Pronunciation (IPA): /rʌn/" in body
     assert "English explanation and example" in body
     assert "To move swiftly on foot." in body
     assert "She runs every morning." in body
     assert "dictionaryapi.dev" in attribution
     assert "CC BY-SA 3.0" in attribution
+    assert "Open pronunciation audio" in buttons
+
+
+def test_dictionary_audio_button_opens_only_the_validated_source_url(window, monkeypatch):
+    from PySide6.QtCore import QUrl
+    from PySide6.QtGui import QDesktopServices
+    from PySide6.QtWidgets import QMessageBox
+
+    from desktranslate.dictionary import EnglishDictionaryEntry
+
+    opened = []
+
+    def fake_exec(dialog):
+        audio_button = next(
+            button for button in dialog.buttons() if button.text() == "Open pronunciation audio"
+        )
+        audio_button.click()
+        return 0
+
+    monkeypatch.setattr(QMessageBox, "exec", fake_exec)
+    monkeypatch.setattr(
+        QDesktopServices,
+        "openUrl",
+        lambda url: opened.append(url.toString()) or True,
+    )
+
+    window.show_word_lookup_result(
+        "hello",
+        "merhaba",
+        "en",
+        "tr",
+        dictionary_entry=EnglishDictionaryEntry(
+            "hello",
+            (),
+            (),
+            "",
+            "",
+            audio_urls=("https://api.dictionaryapi.dev/media/pronunciations/en/hello-us.mp3",),
+        ),
+    )
+
+    assert opened == ["https://api.dictionaryapi.dev/media/pronunciations/en/hello-us.mp3"]

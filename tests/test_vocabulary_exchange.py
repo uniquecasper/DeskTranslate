@@ -19,13 +19,13 @@ def entry(source="hello", translation="merhaba", source_language="en", target_la
 
 
 def _data_rows(content):
-    marker = "#columns:Front,Back,SourceLanguage,TargetLanguage\n"
+    marker = "#columns:Front,Back,SourceLanguage,TargetLanguage,Notes\n"
     assert content.startswith("#separator:Comma\n#html:false\n" + marker)
     return list(csv.reader(io.StringIO(content.split(marker, 1)[1])))
 
 
 def test_export_has_anki_front_back_and_language_columns():
-    assert _data_rows(export_anki_csv([entry()])) == [["hello", "merhaba", "en", "tr"]]
+    assert _data_rows(export_anki_csv([entry()])) == [["hello", "merhaba", "en", "tr", ""]]
 
 
 def test_export_preserves_unicode_commas_quotes_and_multiple_language_pairs():
@@ -37,15 +37,15 @@ def test_export_preserves_unicode_commas_quotes_and_multiple_language_pairs():
     )
 
     assert _data_rows(content) == [
-        ['「こんにちは, "世界"」', 'Merhaba, "dünya" ', "ja", "tr"],
-        ["안녕하세요", "Hello", "ko", "en"],
+        ['「こんにちは, "世界"」', 'Merhaba, "dünya" ', "ja", "tr", ""],
+        ["안녕하세요", "Hello", "ko", "en", ""],
     ]
 
 
 def test_empty_export_contains_valid_anki_column_metadata():
     assert (
         export_anki_csv([])
-        == "#separator:Comma\n#html:false\n#columns:Front,Back,SourceLanguage,TargetLanguage\n"
+        == "#separator:Comma\n#html:false\n#columns:Front,Back,SourceLanguage,TargetLanguage,Notes\n"
     )
 
 
@@ -83,3 +83,28 @@ def test_export_does_not_include_ids_timestamps_or_review_schedule():
     assert "2026-11-02" not in content
     assert "review" not in content.casefold()
     assert ",1," not in content
+
+
+def test_export_includes_personal_notes_with_newlines():
+    content = export_anki_csv(
+        [
+            VocabularyEntry(
+                id=2,
+                source="hello",
+                translation="merhaba",
+                source_language="en",
+                target_language="tr",
+                created_at="2026-11-02T00:00:00+00:00",
+                note="Greeting\nUse with friends.",
+            )
+        ]
+    )
+
+    assert _data_rows(content) == [
+        ["hello", "merhaba", "en", "tr", "Greeting\nUse with friends."]
+    ]
+
+
+def test_export_rejects_formula_like_personal_notes():
+    with pytest.raises(ValueError, match="formula marker"):
+        export_anki_csv([entry(note="=SUM(1,2)")])

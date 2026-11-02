@@ -61,15 +61,18 @@ def test_export_rejects_invalid_language_codes(language):
         export_anki_csv([entry(source_language=language)])
 
 
-@pytest.mark.parametrize("value", ["", "   ", "line\nfeed", "nul\x00byte"])
+@pytest.mark.parametrize(
+    "value",
+    ["", "   ", "line\nfeed", "nul\x00byte", "abc\u202edef"],
+)
 def test_export_rejects_invalid_vocabulary_text(value):
     with pytest.raises(ValueError):
         export_anki_csv([entry(source=value)])
 
 
 def test_export_preserves_legitimate_zero_width_joiners():
-    assert _data_rows(export_anki_csv([entry(source="می\u200cخواهم")])) == [
-        ["می\u200cخواهم", "merhaba", "en", "tr"]
+    assert _data_rows(export_anki_csv([entry(source="می\u200cخواهم", source_language="fa")])) == [
+        ["می\u200cخواهم", "merhaba", "fa", "tr"]
     ]
 
 

@@ -18,35 +18,35 @@ def entry(source="hello", translation="merhaba", source_language="en", target_la
     )
 
 
-def test_export_has_anki_front_back_and_language_columns():
-    rows = list(csv.reader(io.StringIO(export_anki_csv([entry()]))))
+def _data_rows(content):
+    marker = "#columns:Front,Back,SourceLanguage,TargetLanguage\n"
+    assert content.startswith("#separator:Comma\n#html:false\n" + marker)
+    return list(csv.reader(io.StringIO(content.split(marker, 1)[1])))
 
-    assert rows == [
-        ["Front", "Back", "SourceLanguage", "TargetLanguage"],
-        ["hello", "merhaba", "en", "tr"],
-    ]
+
+def test_export_has_anki_front_back_and_language_columns():
+    assert _data_rows(export_anki_csv([entry()])) == [["hello", "merhaba", "en", "tr"]]
 
 
 def test_export_preserves_unicode_commas_quotes_and_multiple_language_pairs():
-    rows = list(
-        csv.reader(
-            io.StringIO(
-                export_anki_csv(
-                    [
-                        entry('「こんにちは, "世界"」', "Merhaba, \"dünya\" ", "ja", "tr"),
-                        entry("안녕하세요", "Hello", "ko", "en"),
-                    ]
-                )
-            )
-        )
+    content = export_anki_csv(
+        [
+            entry('「こんにちは, "世界"」', 'Merhaba, "dünya" ', "ja", "tr"),
+            entry("안녕하세요", "Hello", "ko", "en"),
+        ]
     )
 
-    assert rows[1] == ['「こんにちは, "世界"」', 'Merhaba, "dünya" ', "ja", "tr"]
-    assert rows[2] == ["안녕하세요", "Hello", "ko", "en"]
+    assert _data_rows(content) == [
+        ['「こんにちは, "世界"」', 'Merhaba, "dünya" ', "ja", "tr"],
+        ["안녕하세요", "Hello", "ko", "en"],
+    ]
 
 
-def test_empty_export_contains_only_the_field_header():
-    assert export_anki_csv([]) == "Front,Back,SourceLanguage,TargetLanguage\n"
+def test_empty_export_contains_valid_anki_column_metadata():
+    assert export_anki_csv([]) == (
+        "#separator:Comma\n#html:false\n"
+        "#columns:Front,Back,SourceLanguage,TargetLanguage\n"
+    )
 
 
 @pytest.mark.parametrize("term", ["=1+1", " +SUM(A1:A2)", "-cmd", "@SUM(1,2)"])

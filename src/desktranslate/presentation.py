@@ -1,7 +1,7 @@
 """User-facing session semantics, independent of widgets and worker ownership."""
 
-from dataclasses import dataclass
 import math
+from dataclasses import dataclass
 from typing import Literal
 
 from desktranslate.models import SessionState
@@ -75,6 +75,7 @@ def session_presentation(
     active = state not in {SessionState.IDLE, SessionState.STOPPING, SessionState.SELECTING}
     return SessionPresentation(summaries[state], "Pause", active, active)
 
+
 def latency_details(timings: dict[str, float]) -> str:
     """Format the latest stage timings for a tooltip without accepting content fields."""
     groups = (
@@ -128,4 +129,4 @@ def latency_details(timings: dict[str, float]) -> str:
                 values.append(f"{label} {value:.1f}")
         if values:
             lines.append(f"{title}: " + " · ".join(values))
-    return "\\n".join(lines) if len(lines) > 1 else ""
+    return "\n".join(lines) if len(lines) > 1 else ""

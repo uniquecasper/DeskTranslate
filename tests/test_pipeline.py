@@ -789,7 +789,6 @@ def test_frame_gate_detects_short_text_after_early_rgb_reduction():
     assert changed.getpixel((500, 500)) == (240, 240, 240)
 
 
-
 def test_moving_background_does_not_retranslate_unchanged_subtitle_but_accepts_new_text():
     initial = "This subtitle remains visible while the background animates."
     changed = "A completely different sentence replaces it now."
@@ -838,6 +837,7 @@ def test_moving_background_does_not_retranslate_unchanged_subtitle_but_accepts_n
     delivered = []
     pipeline.start()
     try:
+
         def receive_first():
             delivered.extend(event for event in pipeline.poll() if event.result)
             return any(event.source == initial for event in delivered)

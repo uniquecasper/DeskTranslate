@@ -256,7 +256,7 @@ class VocabularyReviewDialog(QDialog):
         self.word_label.setText(item.entry.source)
         answer = item.entry.translation
         if item.entry.note:
-            answer += "\\n\\nMy note:\\n" + item.entry.note
+            answer += "\n\nMy note:\n" + item.entry.note
         self.answer_label.setText(answer)
         self.answer_label.hide()
         self.show_answer_button.show()

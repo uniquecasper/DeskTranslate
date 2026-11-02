@@ -34,6 +34,29 @@ def test_new_words_are_due_without_changing_existing_vocabulary_rows(stores):
     assert review.state(first.id) is None
 
 
+def test_due_review_queue_keeps_personal_note_after_reopening_store(stores):
+    vocabulary, review = stores
+    entry = vocabulary.add("hello", "merhaba", "en", "tr", "A greeting to friends.")
+
+    reopened = VocabularyReviewStore(vocabulary.path)
+    due = reopened.due_entries()
+
+    assert len(due) == 1
+    assert due[0].entry.id == entry.id
+    assert due[0].entry.note == "A greeting to friends."
+
+
+def test_due_review_entry_carries_personal_note(stores):
+    vocabulary, review = stores
+    entry = vocabulary.add("hello", "merhaba", "en", "tr", "A greeting to friends.")
+
+    due = review.due_entries()
+
+    assert len(due) == 1
+    assert due[0].entry.id == entry.id
+    assert due[0].entry.note == "A greeting to friends."
+
+
 def test_good_rating_schedules_first_review_for_one_day(stores):
     vocabulary, review = stores
     entry = vocabulary.add("hello", "merhaba", "en", "tr")
@@ -124,7 +147,7 @@ def test_review_batch_limit_is_bounded(stores):
         review.due_entries(limit=101)
 
 
-def test_review_table_creation_preserves_version_one_database(tmp_path):
+def test_review_table_creation_preserves_vocabulary_database_and_adds_note_schema(tmp_path):
     path = tmp_path / "vocabulary.sqlite3"
     vocabulary = VocabularyStore(path)
     entry = vocabulary.add("kept", "korundu", "en", "tr")
@@ -140,7 +163,8 @@ def test_review_table_creation_preserves_version_one_database(tmp_path):
     finally:
         connection.close()
 
-    assert version == 1
+    assert version == 2
+    assert entry.note == ""
     assert "vocabulary_entries" in tables
     assert "vocabulary_review_state" in tables
     assert vocabulary.get(entry.id) == entry

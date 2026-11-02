@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMessageBox,
+    QPlainTextEdit,
     QPushButton,
     QTableWidget,
     QTableWidgetItem,
@@ -121,6 +122,55 @@ class VocabularySaveDialog(QDialog):
         return self.source_edit.text(), self.translation_edit.text(), source_language
 
 
+class VocabularyEditDialog(QDialog):
+    """Edit one saved word pair and its local-only personal note."""
+
+    def __init__(self, entry: VocabularyEntry, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("Edit saved vocabulary")
+        self.setMinimumWidth(460)
+        layout = QVBoxLayout(self)
+        layout.addWidget(
+            QLabel(f"Local vocabulary · {entry.source_language} → {entry.target_language}")
+        )
+
+        form = QFormLayout()
+        self.source_edit = QLineEdit(entry.source)
+        self.source_edit.setMaxLength(MAX_SOURCE_CHARS)
+        self.source_edit.setAccessibleName("Source vocabulary term")
+        self.translation_edit = QLineEdit(entry.translation)
+        self.translation_edit.setMaxLength(MAX_TRANSLATION_CHARS)
+        self.translation_edit.setAccessibleName("Translated vocabulary term")
+        self.note_edit = QPlainTextEdit()
+        self.note_edit.setPlainText(entry.note)
+        self.note_edit.setPlaceholderText(
+            "Your own example, context or memory aid. Stored only on this device."
+        )
+        self.note_edit.setAccessibleName("Personal vocabulary note")
+        self.note_edit.setMaximumHeight(130)
+        form.addRow("Source term", self.source_edit)
+        form.addRow("Translation", self.translation_edit)
+        form.addRow("My note", self.note_edit)
+        layout.addLayout(form)
+        limit = QLabel("Personal note: up to 2,000 characters. New lines are supported.")
+        limit.setWordWrap(True)
+        layout.addWidget(limit)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def values(self) -> tuple[str, str, str]:
+        return (
+            self.source_edit.text(),
+            self.translation_edit.text(),
+            self.note_edit.toPlainText(),
+        )
+
+
 class VocabularyReviewDialog(QDialog):
     """A short, local review session with explicit four-button grading."""
 
@@ -202,7 +252,10 @@ class VocabularyReviewDialog(QDialog):
             f"{item.entry.source_language} → {item.entry.target_language}"
         )
         self.word_label.setText(item.entry.source)
-        self.answer_label.setText(item.entry.translation)
+        answer = item.entry.translation
+        if item.entry.note:
+            answer += "\n\nMy note:\n" + item.entry.note
+        self.answer_label.setText(answer)
         self.answer_label.hide()
         self.show_answer_button.show()
         self.show_answer_button.setEnabled(True)
@@ -287,7 +340,7 @@ class LearningPage(QWidget):
         search_row = QHBoxLayout()
         self.search_edit = QLineEdit()
         self.search_edit.setMaxLength(256)
-        self.search_edit.setPlaceholderText("Search saved source terms and translations")
+        self.search_edit.setPlaceholderText("Search saved terms, translations and notes")
         self.search_edit.setAccessibleName("Search saved vocabulary")
         self.search_button = QPushButton("Search")
         self.search_button.setAccessibleName("Search all saved vocabulary")
@@ -295,8 +348,8 @@ class LearningPage(QWidget):
         search_row.addWidget(self.search_button)
         layout.addLayout(search_row)
 
-        self.table = QTableWidget(0, 3)
-        self.table.setHorizontalHeaderLabels(["Source term", "Translation", "Saved"])
+        self.table = QTableWidget(0, 4)
+        self.table.setHorizontalHeaderLabels(["Source term", "Translation", "My notes", "Saved"])
         self.table.setAccessibleName("Saved vocabulary entries")
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
@@ -305,7 +358,8 @@ class LearningPage(QWidget):
         self.table.verticalHeader().setVisible(False)
         self.table.horizontalHeader().setStretchLastSection(True)
         self.table.setColumnWidth(0, 190)
-        self.table.setColumnWidth(1, 230)
+        self.table.setColumnWidth(1, 210)
+        self.table.setColumnWidth(2, 250)
         layout.addWidget(self.table, 1)
 
         footer = QHBoxLayout()
@@ -313,6 +367,10 @@ class LearningPage(QWidget):
         self.next_button = QPushButton("Next")
         self.delete_button = QPushButton("Delete selected")
         self.delete_button.setAccessibleName("Delete selected vocabulary entry")
+        self.delete_button.setEnabled(False)
+        self.edit_button = QPushButton("Edit selected")
+        self.edit_button.setAccessibleName("Edit selected vocabulary entry")
+        self.edit_button.setEnabled(False)
         self.export_button = QPushButton("Export Anki CSV…")
         self.export_button.setAccessibleName("Export saved vocabulary as Anki-compatible CSV")
         self.export_button.setToolTip(
@@ -324,6 +382,7 @@ class LearningPage(QWidget):
         footer.addWidget(self.previous_button)
         footer.addWidget(self.next_button)
         footer.addWidget(self.delete_button)
+        footer.addWidget(self.edit_button)
         footer.addWidget(self.export_button)
         layout.addLayout(footer)
         layout.addWidget(self.status_label)
@@ -335,6 +394,8 @@ class LearningPage(QWidget):
         self.previous_button.clicked.connect(self.previous_page)
         self.next_button.clicked.connect(self.next_page)
         self.delete_button.clicked.connect(self.delete_selected)
+        self.edit_button.clicked.connect(self.edit_selected)
+        self.table.itemSelectionChanged.connect(self._update_selection_actions)
         self.export_button.clicked.connect(self.export_anki)
         self.review_button.clicked.connect(self.start_review)
 
@@ -432,6 +493,7 @@ class LearningPage(QWidget):
                     if needle and (
                         needle not in entry.source.casefold()
                         and needle not in entry.translation.casefold()
+                        and needle not in entry.note.casefold()
                     ):
                         continue
                     if page_start <= matches < page_start + self.PAGE_SIZE:
@@ -454,10 +516,16 @@ class LearningPage(QWidget):
                 source_item = QTableWidgetItem(entry.source)
                 source_item.setData(Qt.ItemDataRole.UserRole, entry.id)
                 translation_item = QTableWidgetItem(entry.translation)
+                note_preview = entry.note.replace("\n", " ↵ ")
+                if len(note_preview) > 100:
+                    note_preview = note_preview[:97] + "…"
+                note_item = QTableWidgetItem(note_preview or "—")
+                note_item.setToolTip(entry.note)
                 saved_item = QTableWidgetItem(entry.created_at[:10])
                 self.table.setItem(row, 0, source_item)
                 self.table.setItem(row, 1, translation_item)
-                self.table.setItem(row, 2, saved_item)
+                self.table.setItem(row, 2, note_item)
+                self.table.setItem(row, 3, saved_item)
 
             first = page_start + 1 if visible else 0
             last = page_start + len(visible)
@@ -466,7 +534,7 @@ class LearningPage(QWidget):
             )
             self.previous_button.setEnabled(self.page_number > 0)
             self.next_button.setEnabled(last < matches)
-            self.delete_button.setEnabled(bool(visible))
+            self._update_selection_actions()
             self.export_button.setEnabled(matches > 0)
             self.refresh_review_status()
         except (OSError, ValueError, RuntimeError):
@@ -476,12 +544,58 @@ class LearningPage(QWidget):
             self.previous_button.setEnabled(False)
             self.next_button.setEnabled(False)
             self.delete_button.setEnabled(False)
+            self.edit_button.setEnabled(False)
             self.export_button.setEnabled(False)
             self.status_label.setText(
                 "Saved vocabulary could not be opened. Your existing data was not changed."
             )
             self.review_status_label.setText("Local review schedule is unavailable.")
             self.review_button.setEnabled(False)
+
+    def _update_selection_actions(self) -> None:
+        row = self.table.currentRow()
+        selected = row >= 0 and self.table.item(row, 0) is not None
+        self.delete_button.setEnabled(selected)
+        self.edit_button.setEnabled(selected)
+
+    def edit_selected(self) -> None:
+        row = self.table.currentRow()
+        item = self.table.item(row, 0) if row >= 0 else None
+        if item is None:
+            self.status_label.setText("Select a saved entry first.")
+            return
+        entry_id = item.data(Qt.ItemDataRole.UserRole)
+        if type(entry_id) is not int:
+            self.status_label.setText("The selected entry is unavailable.")
+            return
+        try:
+            entry = self.store.get(entry_id)
+            if entry is None:
+                self.status_label.setText("The selected entry no longer exists. Refresh the list.")
+                self.refresh()
+                return
+            dialog = VocabularyEditDialog(entry, self)
+            if dialog.exec() != QDialog.DialogCode.Accepted:
+                return
+            source, translation, note = dialog.values()
+            updated = self.store.update(entry.id, source, translation, note)
+            self.refresh()
+            for visible_row in range(self.table.rowCount()):
+                visible_item = self.table.item(visible_row, 0)
+                if (
+                    visible_item is not None
+                    and visible_item.data(Qt.ItemDataRole.UserRole) == updated.id
+                ):
+                    self.table.setCurrentCell(visible_row, 0)
+                    break
+            self.status_label.setText("Saved vocabulary changes locally.")
+        except ValueError as error:
+            # Validation and duplicate-pair errors are safe, actionable user feedback.
+            self.status_label.setText(str(error))
+        except (OSError, RuntimeError):
+            self.status_label.setText(
+                "The vocabulary entry could not be updated. Your existing data was not changed."
+            )
 
     def export_anki(self) -> None:
         """Export all saved terms matching the active filters/search after a user click."""
@@ -507,6 +621,7 @@ class LearningPage(QWidget):
                     if not needle
                     or needle in entry.source.casefold()
                     or needle in entry.translation.casefold()
+                    or needle in entry.note.casefold()
                 )
                 offset += len(page)
                 if len(page) < MAX_LIST_LIMIT:
@@ -528,7 +643,7 @@ class LearningPage(QWidget):
             Path(filename).write_text(content, encoding="utf-8", newline="")
             self.status_label.setText(
                 f"Exported {len(entries)} vocabulary entries. In Anki, map Front and Back "
-                "to your note fields; language columns are optional."
+                "to your note fields; language and Notes columns are optional."
             )
         except (OSError, ValueError, RuntimeError):
             self.status_label.setText(

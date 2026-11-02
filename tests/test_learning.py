@@ -4,6 +4,7 @@ import pytest
 
 from desktranslate.ui.learning import (
     LearningPage,
+    VocabularyEditDialog,
     VocabularySaveDialog,
 )
 from desktranslate.vocabulary import VocabularyStore
@@ -247,3 +248,72 @@ def test_review_dialog_reveals_answer_and_records_explicit_rating(
     assert dialog.progress_label.text() == "Review session complete"
     dialog.deleteLater()
     headless_application.processEvents()
+
+
+def test_review_dialog_reveals_personal_note_with_the_answer(learning_page):
+    from desktranslate.ui.learning import VocabularyReviewDialog
+
+    page, store = learning_page
+    store.add("hello", "merhaba", "en", "tr", "A greeting\nUse with friends.")
+    dialog = VocabularyReviewDialog(page.review_store.due_entries(), page.review_store)
+
+    dialog.show_answer()
+
+    assert dialog.answer_label.text() == "merhaba\n\nMy note:\nA greeting\nUse with friends."
+    dialog.deleteLater()
+
+
+def test_learning_search_finds_personal_notes_and_displays_them(learning_page):
+    page, store = learning_page
+    store.add("hello", "merhaba", "en", "tr", "Friendly greeting\nUsed with friends")
+
+    page.search_edit.setText("FRIENDLY")
+    page.search()
+
+    assert page.match_count == 1
+    assert page.table.item(0, 2).text() == "Friendly greeting ↵ Used with friends"
+    assert page.table.item(0, 2).toolTip() == "Friendly greeting\nUsed with friends"
+
+
+def test_vocabulary_edit_dialog_round_trips_multiline_note(headless_application, tmp_path):
+    store = VocabularyStore(tmp_path / "vocabulary.sqlite3")
+    entry = store.add("hello", "merhaba", "en", "tr", "Original note")
+    dialog = VocabularyEditDialog(entry)
+
+    assert dialog.values() == ("hello", "merhaba", "Original note")
+    dialog.source_edit.setText("hi")
+    dialog.translation_edit.setText("selam")
+    dialog.note_edit.setPlainText("New example\nSecond line")
+
+    assert dialog.values() == ("hi", "selam", "New example\nSecond line")
+    dialog.deleteLater()
+    headless_application.processEvents()
+
+
+def test_edit_selected_persists_source_meaning_and_note(learning_page, monkeypatch):
+    from PySide6.QtWidgets import QDialog
+
+    page, store = learning_page
+    entry = store.add("helo", "helo", "en", "tr", "Old note")
+    page.refresh()
+    page.table.setCurrentCell(0, 0)
+    assert page.edit_button.isEnabled()
+
+    def accept_edit(dialog):
+        dialog.source_edit.setText("hello")
+        dialog.translation_edit.setText("merhaba")
+        dialog.note_edit.setPlainText("Greeting\nUse with friends.")
+        return QDialog.DialogCode.Accepted
+
+    monkeypatch.setattr(VocabularyEditDialog, "exec", accept_edit)
+    page.edit_selected()
+
+    updated = store.get(entry.id)
+    assert updated is not None
+    assert (updated.source, updated.translation, updated.note) == (
+        "hello",
+        "merhaba",
+        "Greeting\nUse with friends.",
+    )
+    assert page.table.item(0, 2).toolTip() == "Greeting\nUse with friends."
+    assert page.status_label.text() == "Saved vocabulary changes locally."

@@ -1,6 +1,7 @@
 import sqlite3
 import threading
 import time
+from datetime import UTC, datetime
 
 import pytest
 
@@ -113,6 +114,22 @@ def test_exact_duplicate_is_idempotent_but_different_translation_is_allowed(tmp_
     assert store.count() == 2
 
 
+@pytest.mark.parametrize(
+    "note",
+    [None, 1, "bad\x00note", "abc\u202edef", "x" * (vocabulary.MAX_NOTE_CHARS + 1)],
+)
+def test_add_rejects_invalid_personal_notes(store, note):
+    with pytest.raises(ValueError, match="Personal note"):
+        store.add("hello", "merhaba", "en", "tr", note)
+    assert store.count() == 0
+
+
+def test_personal_note_accepts_legitimate_unicode_joiners(store):
+    entry = store.add("hello", "merhaba", "en", "tr", "می\u200cخواهم")
+
+    assert entry.note == "می\u200cخواهم"
+
+
 def test_sql_metacharacters_are_stored_as_text(store, path):
     hostile = "x'); DROP TABLE vocabulary_entries; --"
 
@@ -138,7 +155,82 @@ def test_database_holds_only_the_approved_vocabulary_fields(store, path):
         "source_language",
         "target_language",
         "created_at",
+        "note",
     ]
+
+
+def test_personal_note_is_stored_and_normalized(store):
+    entry = store.add(
+        "hello",
+        "merhaba",
+        "en",
+        "tr",
+        "  Example: hello there.\r\nRemember the greeting.  ",
+    )
+
+    assert entry.note == "Example: hello there.\nRemember the greeting."
+    assert store.get(entry.id) == entry
+
+
+def test_update_edits_source_translation_and_note_without_changing_language_or_created_time(store):
+    saved = store.add("helo", "helo", "en", "tr")
+    review = store.update(saved.id, "hello", "merhaba", "Greeting\nUse with friends.")
+
+    assert review.id == saved.id
+    assert review.source == "hello"
+    assert review.translation == "merhaba"
+    assert review.source_language == "en"
+    assert review.target_language == "tr"
+    assert review.created_at == saved.created_at
+    assert review.note == "Greeting\nUse with friends."
+    assert store.get(saved.id) == review
+
+
+def test_update_rejects_duplicate_pair_without_modifying_either_entry(store):
+    first = store.add("hello", "merhaba", "en", "tr", "First note")
+    second = store.add("hi", "selam", "en", "tr", "Second note")
+
+    with pytest.raises(ValueError, match="identical word pair"):
+        store.update(second.id, "hello", "merhaba", "Changed")
+
+    assert store.get(first.id) == first
+    assert store.get(second.id) == second
+
+
+def test_update_rejects_missing_ids_and_invalid_notes(store):
+    with pytest.raises(ValueError, match="no longer exists"):
+        store.update(999, "hello", "merhaba", "note")
+
+    saved = store.add("hello", "merhaba", "en", "tr")
+    with pytest.raises(ValueError, match="Personal note"):
+        store.update(saved.id, "hello", "merhaba", "bad\x00note")
+    with pytest.raises(ValueError, match="too large"):
+        store.update(saved.id, "hello", "merhaba", "x" * (vocabulary.MAX_NOTE_CHARS + 1))
+
+    assert store.get(saved.id) == saved
+
+
+def test_update_is_atomic_when_the_database_rejects_the_write(store, path):
+    saved = store.add("hello", "merhaba", "en", "tr")
+    connection = sqlite3.connect(path)
+    try:
+        connection.execute(
+            """
+            CREATE TRIGGER block_vocabulary_update
+            BEFORE UPDATE ON vocabulary_entries
+            BEGIN
+                SELECT RAISE(ABORT, 'blocked vocabulary update');
+            END
+            """
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    with pytest.raises(VocabularyStoreError):
+        store.update(saved.id, "hello", "selam", "note")
+
+    assert store.get(saved.id) == saved
 
 
 # --- input validation -----------------------------------------------------------------
@@ -465,6 +557,78 @@ def test_fresh_database_gets_the_expected_schema_once(path):
     assert _tables(path) == ["vocabulary_entries"]
 
 
+def test_version_one_migration_preserves_words_notes_and_review_schedule(tmp_path):
+    from desktranslate.vocabulary_review import VocabularyReviewStore
+
+    path = tmp_path / "vocabulary.sqlite3"
+    _make_database(
+        path,
+        [
+            """
+            CREATE TABLE vocabulary_entries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                source TEXT NOT NULL CHECK (length(source) BETWEEN 1 AND 500),
+                translation TEXT NOT NULL CHECK (length(translation) BETWEEN 1 AND 2000),
+                source_language TEXT NOT NULL,
+                target_language TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                UNIQUE (source_language, target_language, source, translation)
+            )
+            """,
+            """
+            CREATE INDEX idx_vocabulary_language_pair
+            ON vocabulary_entries (source_language, target_language, id DESC)
+            """,
+            """
+            INSERT INTO vocabulary_entries (
+                source, translation, source_language, target_language, created_at
+            ) VALUES ('hello', 'merhaba', 'en', 'tr', '2026-10-01T12:00:00+00:00')
+            """,
+        ],
+        1,
+    )
+    review_before = VocabularyReviewStore(path)
+    saved_state = review_before.review(1, "good", now=datetime(2026, 11, 1, tzinfo=UTC))
+
+    store = VocabularyStore(path)
+    entry = store.get(1)
+
+    assert _user_version(path) == 2
+    assert entry is not None
+    assert entry.source == "hello"
+    assert entry.translation == "merhaba"
+    assert entry.created_at == "2026-10-01T12:00:00+00:00"
+    assert entry.note == ""
+    assert store.update(entry.id, entry.source, entry.translation, "Greeting").note == "Greeting"
+    assert VocabularyReviewStore(path).state(1) == saved_state
+
+
+def test_version_two_migration_is_idempotent(path):
+    store = VocabularyStore(path)
+    entry = store.add("hello", "merhaba", "en", "tr", "Greeting")
+
+    reopened = VocabularyStore(path)
+
+    assert _user_version(path) == 2
+    assert reopened.get(entry.id) == entry
+
+
+def test_version_one_migration_rejects_a_malformed_schema_without_modification(path):
+    _make_database(
+        path,
+        [
+            "CREATE TABLE vocabulary_entries (id INTEGER, junk TEXT)",
+        ],
+        1,
+    )
+    before = path.read_bytes()
+
+    with pytest.raises(VocabularyStoreError, match="expected schema"):
+        VocabularyStore(path)
+
+    assert path.read_bytes() == before
+
+
 def test_database_from_newer_schema_is_not_modified(tmp_path):
     path = tmp_path / "vocabulary.sqlite3"
     connection = sqlite3.connect(path)
@@ -493,6 +657,7 @@ def _make_database(path, statements, user_version):
             -5: "PRAGMA user_version = -5",
             0: "PRAGMA user_version = 0",
             1: "PRAGMA user_version = 1",
+            2: "PRAGMA user_version = 2",
         }
         connection.execute(pragma_statements[user_version])
         connection.commit()

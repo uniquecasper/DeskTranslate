@@ -1,7 +1,7 @@
 """Local spaced-repetition scheduling for explicitly saved vocabulary.
 
-Review metadata is stored beside vocabulary entries in a separate table. The
-existing vocabulary table and its schema version are left unchanged.
+Review scheduling metadata remains in its own table beside vocabulary entries.
+Vocabulary content has a separate, transactional schema migration.
 """
 
 from __future__ import annotations
@@ -210,7 +210,7 @@ class VocabularyReviewStore:
                 SELECT
                     vocabulary.id, vocabulary.source, vocabulary.translation,
                     vocabulary.source_language, vocabulary.target_language,
-                    vocabulary.created_at,
+                    vocabulary.created_at, vocabulary.note,
                     review.entry_id, review.due_at, review.interval_days,
                     review.ease, review.repetitions, review.lapses,
                     review.last_reviewed_at
@@ -234,6 +234,7 @@ class VocabularyReviewStore:
                 source_language=str(row["source_language"]),
                 target_language=str(row["target_language"]),
                 created_at=str(row["created_at"]),
+                note=str(row["note"]),
             )
             if row["entry_id"] is None:
                 state = ReviewState(

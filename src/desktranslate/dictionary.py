@@ -163,11 +163,7 @@ def lookup_english_word(
                 if not phonetic:
                     phonetic = _phonetic_text(phonetic_item.get("text"))
                 audio_url = _safe_audio_url(phonetic_item.get("audio"))
-                if (
-                    audio_url
-                    and audio_url not in audio_urls
-                    and len(audio_urls) < MAX_AUDIO_URLS
-                ):
+                if audio_url and audio_url not in audio_urls and len(audio_urls) < MAX_AUDIO_URLS:
                     audio_urls.append(audio_url)
                 if len(audio_urls) >= MAX_AUDIO_URLS:
                     break

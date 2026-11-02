@@ -129,9 +129,21 @@ class FrameGate:
         self.recent_changes: deque[float] = deque(maxlen=8)
 
     def observe(self, image: Image.Image, now: float) -> FrameDecision:
-        # The thumbnail retains aspect ratio, reducing work to at most ~32K pixels.
-        sample = image.convert("L")
-        sample.thumbnail((256, 128))
+        # Reduce large RGB frames before grayscale conversion. The comparison only
+        # uses a 256x128 preview, so converting every full-resolution pixel to L
+        # needlessly allocates and processes a much larger intermediate image.
+        reduction = max(
+            1,
+            (image.width + 511) // 512,
+            (image.height + 255) // 256,
+        )
+        if reduction > 1:
+            sample = image.reduce(reduction)
+            sample.thumbnail((256, 128))
+            sample = sample.convert("L")
+        else:
+            sample = image.convert("L")
+            sample.thumbnail((256, 128))
         changed = self.candidate is None or sample.size != self.candidate.size
         if not changed and self.candidate is not None:
             diff = ImageChops.difference(sample, self.candidate)

@@ -17,7 +17,7 @@ Architecture and privacy constraints are documented in [architecture](architectu
 
 ## A. Reliability and speed — first
 
-- [ ] Instrument capture → OCR → stabilization → provider → overlay latency. Expose stage timings without storing screen text.
+- [x] Instrument capture → OCR → stabilization → provider → overlay latency. Expose the latest stage timings in the translation status tooltip and rolling percentiles in user-requested diagnostics; never store screen text.
 - [ ] Reduce redundant OCR/provider work using existing bounded mailboxes and caches; preserve cancellation and stale-result rejection.
 - [ ] Ensure accepted live translations appear automatically and recover cleanly after provider/OCR failures. Remove dead or misleading controls.
 - [ ] Add configurable capture/translation pacing and per-stage timeouts with safe defaults.

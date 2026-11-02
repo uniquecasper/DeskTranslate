@@ -588,9 +588,7 @@ def test_version_one_migration_preserves_words_notes_and_review_schedule(tmp_pat
         1,
     )
     review_before = VocabularyReviewStore(path)
-    saved_state = review_before.review(
-        1, "good", now=datetime(2026, 11, 1, tzinfo=UTC)
-    )
+    saved_state = review_before.review(1, "good", now=datetime(2026, 11, 1, tzinfo=UTC))
 
     store = VocabularyStore(path)
     entry = store.get(1)

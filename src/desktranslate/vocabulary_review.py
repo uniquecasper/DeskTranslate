@@ -1,7 +1,7 @@
 """Local spaced-repetition scheduling for explicitly saved vocabulary.
 
-Review metadata is stored beside vocabulary entries in a separate table. The
-existing vocabulary table and its schema version are left unchanged.
+Review scheduling metadata remains in its own table beside vocabulary entries.
+Vocabulary content has a separate, transactional schema migration.
 """
 
 from __future__ import annotations

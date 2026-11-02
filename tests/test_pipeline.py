@@ -787,3 +787,79 @@ def test_frame_gate_detects_short_text_after_early_rgb_reduction():
     # Sampling must not mutate the original image that is later passed to OCR.
     assert baseline.getpixel((500, 500)) == (16, 16, 16)
     assert changed.getpixel((500, 500)) == (240, 240, 240)
+
+
+def test_moving_background_does_not_retranslate_unchanged_subtitle_but_accepts_new_text():
+    initial = "This subtitle remains visible while the background animates."
+    changed = "A completely different sentence replaces it now."
+
+    class MovingCapture:
+        tick = 0
+        text = initial
+
+        def capture(self, region):
+            self.tick += 1
+            shade = (self.tick * 31) % 256
+            return Image.new("RGB", (120, 80), (shade, shade, shade))
+
+        def close(self):
+            pass
+
+    capture = MovingCapture()
+
+    class SubtitleOCR:
+        def recognize(self, image, language, vertical=False):
+            return OCRResult(capture.text, confidence=0.99)
+
+        def close(self):
+            pass
+
+    class RecordingProvider:
+        capabilities = Capabilities(context=True)
+
+        def __init__(self):
+            self.calls = []
+
+        def translate(self, request):
+            self.calls.append(request.text)
+            return TranslationResult("translated: " + request.text)
+
+        def close(self):
+            pass
+
+    provider = RecordingProvider()
+    pipeline = Pipeline(
+        Settings(quality="fast", recent_region=[0, 0, 120, 80]),
+        lambda: capture,
+        SubtitleOCR,
+        lambda: provider,
+    )
+    delivered = []
+    pipeline.start()
+    try:
+
+        def receive_first():
+            delivered.extend(event for event in pipeline.poll() if event.result)
+            return any(event.source == initial for event in delivered)
+
+        until(receive_first, 6)
+        until(lambda: pipeline.counters["ocr"] >= 3, 6)
+        assert provider.calls == [initial]
+
+        capture.text = changed
+
+        def receive_changed():
+            delivered.extend(event for event in pipeline.poll() if event.result)
+            return any(event.source == changed for event in delivered)
+
+        until(receive_changed, 6)
+        assert provider.calls == [initial, changed]
+
+        more_ocr = pipeline.counters["ocr"] + 2
+        until(lambda: pipeline.counters["ocr"] >= more_ocr, 6)
+        assert provider.calls == [initial, changed]
+        assert pipeline.counters["translations"] == 2
+        assert pipeline.frames.queue.qsize() <= 1
+    finally:
+        pipeline.stop()
+        assert pipeline.wait_closed()

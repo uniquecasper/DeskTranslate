@@ -18,7 +18,7 @@ from desktranslate.vocabulary import (
 )
 
 MAX_EXPORT_BYTES = 24 * 1024 * 1024
-_HEADER = ("Front", "Back", "SourceLanguage", "TargetLanguage")
+_HEADER = "#separator:Comma\n#html:false\n#columns:Front,Back,SourceLanguage,TargetLanguage\n"
 
 
 def _validate_text(value: object, label: str, max_chars: int, max_bytes: int) -> str:
@@ -47,12 +47,13 @@ def _csv_row(values: tuple[str, ...]) -> str:
 def export_anki_csv(entries: Iterable[VocabularyEntry]) -> str:
     """Export saved terms as UTF-8 CSV with Anki-friendly Front/Back fields.
 
-    Language codes are extra columns so one export can safely contain multiple
-    language pairs. Spaced-repetition scheduling metadata is intentionally not
-    exported. The caller must invoke this only after an explicit user action.
+    Anki's text-import metadata names the columns. Language codes are extra
+    fields so one export can safely contain multiple language pairs.
+    Spaced-repetition scheduling metadata is intentionally not exported.
+    The caller must invoke this only after an explicit user action.
     """
-    chunks = [_csv_row(_HEADER)]
-    size = len(chunks[0].encode("utf-8"))
+    chunks = [_HEADER]
+    size = len(_HEADER.encode("utf-8"))
     count = 0
 
     for entry in entries:
@@ -62,18 +63,16 @@ def export_anki_csv(entries: Iterable[VocabularyEntry]) -> str:
         if not isinstance(entry, VocabularyEntry):
             raise ValueError("The vocabulary export contains an invalid entry.")
 
-        source = _validate_text(
-            entry.source, "Source term", MAX_SOURCE_CHARS, MAX_SOURCE_BYTES
-        )
+        source = _validate_text(entry.source, "Source term", MAX_SOURCE_CHARS, MAX_SOURCE_BYTES)
         translation = _validate_text(
             entry.translation,
             "Translation",
             MAX_TRANSLATION_CHARS,
             MAX_TRANSLATION_BYTES,
         )
-        if entry.source_language not in REGISTRY or entry.source_language == "auto":
+        if not isinstance(entry.source_language, str) or entry.source_language not in REGISTRY or entry.source_language == "auto":
             raise ValueError("The export contains an unsupported source language.")
-        if entry.target_language not in REGISTRY or entry.target_language == "auto":
+        if not isinstance(entry.target_language, str) or entry.target_language not in REGISTRY or entry.target_language == "auto":
             raise ValueError("The export contains an unsupported target language.")
 
         row = _csv_row((source, translation, entry.source_language, entry.target_language))

@@ -147,9 +147,12 @@ def test_lookup_extracts_bounded_ipa_and_only_trusted_audio_urls(monkeypatch):
             "text": "/rʌn/",
             "audio": "https://api.dictionaryapi.dev/media/pronunciations/en/run-us.ogg",
         },
+        {"audio": "https://api.dictionaryapi.dev/media/pronunciations/en/run-au.wav"},
+        {"audio": "https://api.dictionaryapi.dev/media/pronunciations/en/run-extra.mp3"},
         {"audio": "https://evil.invalid/media/pronunciations/en/run.mp3"},
         {"audio": "http://api.dictionaryapi.dev/media/pronunciations/en/run.mp3"},
         {"audio": "https://api.dictionaryapi.dev/media/pronunciations/en/../run.mp3"},
+        {"audio": "https://api.dictionaryapi.dev/media/pronunciations/en/run.mp3?redirect=https%3A%2F%2Fevil.invalid"},
         {"audio": "javascript:alert(1)"},
     ]
     monkeypatch.setattr(
@@ -164,6 +167,7 @@ def test_lookup_extracts_bounded_ipa_and_only_trusted_audio_urls(monkeypatch):
     assert result.audio_urls == (
         "https://api.dictionaryapi.dev/media/pronunciations/en/run-uk.mp3",
         "https://api.dictionaryapi.dev/media/pronunciations/en/run-us.ogg",
+        "https://api.dictionaryapi.dev/media/pronunciations/en/run-au.wav",
     )
 
 

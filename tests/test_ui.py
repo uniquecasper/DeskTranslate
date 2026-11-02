@@ -637,17 +637,16 @@ def test_dictionary_audio_button_opens_only_the_validated_source_url(window, mon
 
     from desktranslate.dictionary import EnglishDictionaryEntry
 
-    audio_button = []
     opened = []
 
     def fake_exec(dialog):
-        audio_button.append(
-            next(button for button in dialog.buttons() if button.text() == "Open pronunciation audio")
+        audio_button = next(
+            button for button in dialog.buttons() if button.text() == "Open pronunciation audio"
         )
+        audio_button.click()
         return 0
 
     monkeypatch.setattr(QMessageBox, "exec", fake_exec)
-    monkeypatch.setattr(QMessageBox, "clickedButton", lambda _dialog: audio_button[0])
     monkeypatch.setattr(
         QDesktopServices,
         "openUrl",

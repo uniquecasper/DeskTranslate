@@ -98,9 +98,7 @@ def _note(value: object) -> str:
         raise ValueError("Personal note must be text.")
     if len(value) > MAX_NOTE_CHARS * 4:
         raise ValueError("Personal note is too large.")
-    value = unicodedata.normalize(
-        "NFC", value.replace("\r\n", "\n").replace("\r", "\n")
-    ).strip()
+    value = unicodedata.normalize("NFC", value.replace("\r\n", "\n").replace("\r", "\n")).strip()
     if len(value) > MAX_NOTE_CHARS or any(
         (unicodedata.category(character) == "Cc" and character not in {"\n", "\t"})
         or character in _BIDI_CONTROLS
@@ -181,13 +179,9 @@ def _validate_schema(connection: sqlite3.Connection, version: int = SCHEMA_VERSI
     normalized_sql = " ".join(table_sql.upper().split())
     has_expected_checks = (
         f"CHECK (LENGTH(SOURCE) BETWEEN 1 AND {MAX_SOURCE_CHARS})" in normalized_sql
-        and f"CHECK (LENGTH(TRANSLATION) BETWEEN 1 AND {MAX_TRANSLATION_CHARS})"
-        in normalized_sql
+        and f"CHECK (LENGTH(TRANSLATION) BETWEEN 1 AND {MAX_TRANSLATION_CHARS})" in normalized_sql
     )
-    has_note_check = (
-        version == 1
-        or f"CHECK (LENGTH(NOTE) <= {MAX_NOTE_CHARS})" in normalized_sql
-    )
+    has_note_check = version == 1 or f"CHECK (LENGTH(NOTE) <= {MAX_NOTE_CHARS})" in normalized_sql
     has_autoincrement = "ID INTEGER PRIMARY KEY AUTOINCREMENT" in normalized_sql
 
     expected_index = connection.execute(
@@ -304,9 +298,7 @@ class VocabularyStore:
                 "SELECT 1 FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' LIMIT 1"
             ).fetchone()
             if foreign is not None:
-                raise VocabularyStoreError(
-                    "The file is not a DeskTranslate vocabulary database."
-                )
+                raise VocabularyStoreError("The file is not a DeskTranslate vocabulary database.")
             connection.execute(
                 """
                 CREATE TABLE vocabulary_entries (

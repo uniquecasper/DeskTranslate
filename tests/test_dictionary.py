@@ -152,7 +152,9 @@ def test_lookup_extracts_bounded_ipa_and_only_trusted_audio_urls(monkeypatch):
         {"audio": "https://evil.invalid/media/pronunciations/en/run.mp3"},
         {"audio": "http://api.dictionaryapi.dev/media/pronunciations/en/run.mp3"},
         {"audio": "https://api.dictionaryapi.dev/media/pronunciations/en/../run.mp3"},
-        {"audio": "https://api.dictionaryapi.dev/media/pronunciations/en/run.mp3?redirect=https%3A%2F%2Fevil.invalid"},
+        {
+            "audio": "https://api.dictionaryapi.dev/media/pronunciations/en/run.mp3?redirect=https%3A%2F%2Fevil.invalid"
+        },
         {"audio": "javascript:alert(1)"},
     ]
     monkeypatch.setattr(

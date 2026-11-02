@@ -631,7 +631,6 @@ def test_dictionary_dialog_shows_meaning_definition_pronunciation_and_audio(wind
 
 
 def test_dictionary_audio_button_opens_only_the_validated_source_url(window, monkeypatch):
-    from PySide6.QtCore import QUrl
     from PySide6.QtGui import QDesktopServices
     from PySide6.QtWidgets import QMessageBox
 

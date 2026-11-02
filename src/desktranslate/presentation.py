@@ -121,7 +121,12 @@ def latency_details(timings: dict[str, float]) -> str:
         values = []
         for label, key in fields:
             value = timings.get(key)
-            if type(value) in {int, float} and 0 <= value <= 600_000 and math.isfinite(value):
+            if (
+                value is not None
+                and type(value) in {int, float}
+                and 0 <= value <= 600_000
+                and math.isfinite(value)
+            ):
                 values.append(f"{label} {value:.1f}")
         if values:
             lines.append(f"{title}: " + " · ".join(values))

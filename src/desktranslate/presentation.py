@@ -1,5 +1,6 @@
 """User-facing session semantics, independent of widgets and worker ownership."""
 
+import math
 from dataclasses import dataclass
 from typing import Literal
 
@@ -73,3 +74,60 @@ def session_presentation(
     }
     active = state not in {SessionState.IDLE, SessionState.STOPPING, SessionState.SELECTING}
     return SessionPresentation(summaries[state], "Pause", active, active)
+
+
+def latency_details(timings: dict[str, float]) -> str:
+    """Format the latest stage timings for a tooltip without accepting content fields."""
+    groups = (
+        (
+            "Capture",
+            (("Capture", "capture_ms"), ("Frame analysis", "change_ms")),
+        ),
+        (
+            "OCR",
+            (
+                ("Preprocessing", "preprocess_ms"),
+                ("Engine", "ocr_ms"),
+                ("Process round-trip", "ocr_call_ms"),
+                ("Detection", "ocr_detect_ms"),
+                ("Classification", "ocr_classify_ms"),
+                ("Recognition", "ocr_recognize_ms"),
+                ("Reconstruction", "ocr_reconstruct_ms"),
+                ("Layout detection", "ocr_layout_detect_ms"),
+                ("Layout recognition", "ocr_layout_recognize_ms"),
+                ("Regional recognition", "ocr_regional_ms"),
+            ),
+        ),
+        ("Stabilization", (("Text stabilization", "temporal_ms"),)),
+        (
+            "Translation",
+            (
+                ("Context preparation", "context_ms"),
+                ("Queue wait", "queue_ms"),
+                ("Provider", "provider_ms"),
+            ),
+        ),
+        (
+            "Delivery",
+            (
+                ("End-to-end", "total_ms"),
+                ("GUI delivery", "gui_delivery_ms"),
+                ("Overlay update", "overlay_schedule_ms"),
+            ),
+        ),
+    )
+    lines = ["Latest translation latency · milliseconds"]
+    for title, fields in groups:
+        values = []
+        for label, key in fields:
+            value = timings.get(key)
+            if (
+                value is not None
+                and type(value) in {int, float}
+                and 0 <= value <= 600_000
+                and math.isfinite(value)
+            ):
+                values.append(f"{label} {value:.1f}")
+        if values:
+            lines.append(f"{title}: " + " · ".join(values))
+    return "\n".join(lines) if len(lines) > 1 else ""

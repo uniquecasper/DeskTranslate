@@ -58,7 +58,7 @@ from desktranslate.metrics import LatencyMetrics
 from desktranslate.models import PipelineEvent, Rect, SessionState, Stamp, TranslationRequest
 from desktranslate.ocr import IsolatedOCR, ModelManager
 from desktranslate.pipeline import Pipeline
-from desktranslate.presentation import session_presentation
+from desktranslate.presentation import latency_details, session_presentation
 from desktranslate.providers import SPECS, create_provider
 from desktranslate.security import CredentialStore, is_loopback_endpoint, validate_endpoint
 from desktranslate.settings import Settings, SettingsStore, data_dir
@@ -1674,6 +1674,7 @@ class MainWindow(QMainWindow):
                 "overlay_schedule_ms": (time.perf_counter() - start) * 1000,
             }
             self.metrics.observe(self.timings)
+            self.status_label.setToolTip(latency_details(self.timings))
             completion_saved = True
             if not self.settings.onboarding_done:
                 updated = copy.deepcopy(self.settings)

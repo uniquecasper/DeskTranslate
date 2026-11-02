@@ -7,6 +7,7 @@ bounded collection rather than only the currently visible page.
 from __future__ import annotations
 
 from collections.abc import Callable
+from pathlib import Path
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QShowEvent
@@ -15,6 +16,7 @@ from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
     QDialogButtonBox,
+    QFileDialog,
     QFormLayout,
     QHBoxLayout,
     QLabel,
@@ -36,6 +38,7 @@ from desktranslate.vocabulary import (
     VocabularyEntry,
     VocabularyStore,
 )
+from desktranslate.vocabulary_exchange import export_anki_csv
 from desktranslate.vocabulary_review import ReviewItem, VocabularyReviewStore
 
 
@@ -233,7 +236,7 @@ class VocabularyReviewDialog(QDialog):
 
 
 class LearningPage(QWidget):
-    """Review and search explicitly saved terms without exporting them."""
+    """Review, search and explicitly export user-saved vocabulary."""
 
     PAGE_SIZE = 100
 
@@ -310,11 +313,18 @@ class LearningPage(QWidget):
         self.next_button = QPushButton("Next")
         self.delete_button = QPushButton("Delete selected")
         self.delete_button.setAccessibleName("Delete selected vocabulary entry")
+        self.export_button = QPushButton("Export Anki CSV…")
+        self.export_button.setAccessibleName("Export saved vocabulary as Anki-compatible CSV")
+        self.export_button.setToolTip(
+            "Export all saved words matching the current language filters and search."
+        )
+        self.export_button.setEnabled(False)
         self.status_label = QLabel("Open this page to load saved vocabulary.")
         self.status_label.setWordWrap(True)
         footer.addWidget(self.previous_button)
         footer.addWidget(self.next_button)
         footer.addWidget(self.delete_button)
+        footer.addWidget(self.export_button)
         layout.addLayout(footer)
         layout.addWidget(self.status_label)
 
@@ -325,6 +335,7 @@ class LearningPage(QWidget):
         self.previous_button.clicked.connect(self.previous_page)
         self.next_button.clicked.connect(self.next_page)
         self.delete_button.clicked.connect(self.delete_selected)
+        self.export_button.clicked.connect(self.export_anki)
         self.review_button.clicked.connect(self.start_review)
 
     def showEvent(self, event: QShowEvent) -> None:
@@ -456,6 +467,7 @@ class LearningPage(QWidget):
             self.previous_button.setEnabled(self.page_number > 0)
             self.next_button.setEnabled(last < matches)
             self.delete_button.setEnabled(bool(visible))
+            self.export_button.setEnabled(matches > 0)
             self.refresh_review_status()
         except (OSError, ValueError, RuntimeError):
             self.table.setRowCount(0)
@@ -464,11 +476,64 @@ class LearningPage(QWidget):
             self.previous_button.setEnabled(False)
             self.next_button.setEnabled(False)
             self.delete_button.setEnabled(False)
+            self.export_button.setEnabled(False)
             self.status_label.setText(
                 "Saved vocabulary could not be opened. Your existing data was not changed."
             )
             self.review_status_label.setText("Local review schedule is unavailable.")
             self.review_button.setEnabled(False)
+
+    def export_anki(self) -> None:
+        """Export all saved terms matching the active filters/search after a user click."""
+        try:
+            source_language = self._language_filter(self.source_filter)
+            target_language = self._language_filter(self.target_filter)
+            needle = self.search_edit.text().strip().casefold()
+            entries: list[VocabularyEntry] = []
+            offset = 0
+
+            while offset < MAX_ENTRIES:
+                page = self.store.list_entries(
+                    limit=MAX_LIST_LIMIT,
+                    offset=offset,
+                    source_language=source_language,
+                    target_language=target_language,
+                )
+                if not page:
+                    break
+                entries.extend(
+                    entry
+                    for entry in page
+                    if not needle
+                    or needle in entry.source.casefold()
+                    or needle in entry.translation.casefold()
+                )
+                offset += len(page)
+                if len(page) < MAX_LIST_LIMIT:
+                    break
+
+            if not entries:
+                self.status_label.setText("No saved vocabulary matches the current filters.")
+                return
+
+            content = export_anki_csv(entries)
+            filename, _ = QFileDialog.getSaveFileName(
+                self,
+                "Export vocabulary for Anki",
+                "DeskTranslate-Anki.csv",
+                "CSV files (*.csv)",
+            )
+            if not filename:
+                return
+            Path(filename).write_text(content, encoding="utf-8", newline="")
+            self.status_label.setText(
+                f"Exported {len(entries)} vocabulary entries. In Anki, map Front and Back "
+                "to your note fields; language columns are optional."
+            )
+        except (OSError, ValueError, RuntimeError):
+            self.status_label.setText(
+                "Vocabulary export failed. Your saved words and review schedule were not changed."
+            )
 
     def delete_selected(self) -> None:
         row = self.table.currentRow()

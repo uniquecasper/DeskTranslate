@@ -31,6 +31,7 @@ Architecture and privacy constraints are documented in [architecture](architectu
 - [ ] Expand translation modes: game dialogue, subtitles, technical/software, literal and natural; preview custom instructions.
 - [ ] Improve context controls: bounded recent dialogue, per-profile terminology/story notes, reset/disable controls and cross-profile leakage tests.
 - [ ] Add optional user-configured provider failover with an explicit allowlist and local/cloud policy. No implicit cloud fallback; never transmit to an unapproved provider.
+- [x] Add a bundled-sample generation probe for explicitly selected local models; distinguish server/model generation from translation-quality qualification.
 - [ ] Improve model capability checks and provider error explanations; expose safe retry/refresh actions.
 
 ## C. Learning system

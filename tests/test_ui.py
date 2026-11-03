@@ -735,6 +735,8 @@ def test_translation_status_tooltip_exposes_latest_numeric_stages_only(window):
     assert "Provider 325.0" in tooltip
     assert "PRIVATE" not in tooltip
 
+
+
 def test_local_model_probe_uses_bundled_sample_without_saving_or_sending_screen_content(
     window, monkeypatch
 ):

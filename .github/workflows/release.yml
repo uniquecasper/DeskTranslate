@@ -1,4 +1,4 @@
-name: Build, qualify and publish DeskTranslate 2.2.0
+name: Build, qualify and publish DeskTranslate 2.2.1
 on:
   push:
     branches: [main]
@@ -9,7 +9,7 @@ on:
 permissions:
   contents: write
 concurrency:
-  group: desktranslate-2-2-0-release
+  group: desktranslate-2-2-1-release
   cancel-in-progress: true
 jobs:
   release:
@@ -40,7 +40,7 @@ jobs:
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python tools/validate.py --predeploy --junitxml .audit/pytest.xml
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          python -c "from pathlib import Path; from desktranslate import __version__; from tools.release_support import version_gate,require_release_condition; version_gate(Path.cwd()); require_release_condition(__version__ == '2.2.0', 'This workflow is reserved for the 2.2.0 release')"
+          python -c "from pathlib import Path; from desktranslate import __version__; from tools.release_support import version_gate,require_release_condition; version_gate(Path.cwd()); require_release_condition(__version__ == '2.2.1', 'This workflow is reserved for the 2.2.1 release')"
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - name: Prepare verified installer compiler
         run: ./tools/install_inno.ps1
@@ -71,15 +71,15 @@ jobs:
         run: |
           python -c "from threading import Event; from desktranslate.ocr import ModelManager; from tools.release_support import require_release_condition; manager=ModelManager(); manager.install('ja',Event(),lambda *args: None); require_release_condition(manager.installed('ja',verify=True), 'Japanese OCR model verification failed')"
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-      - name: Download and verify the official 2.1.0 installer
+      - name: Download and verify the official 2.2.0 installer
         shell: pwsh
         run: |
-          $previousInstaller = Join-Path $env:RUNNER_TEMP 'DeskTranslate-2.1.0-Setup-x64.exe'
-          Invoke-WebRequest -Uri 'https://github.com/uniquecasper/DeskTranslate/releases/download/v2.1.0/DeskTranslate-2.1.0-Setup-x64.exe' -OutFile $previousInstaller
+          $previousInstaller = Join-Path $env:RUNNER_TEMP 'DeskTranslate-2.2.0-Setup-x64.exe'
+          Invoke-WebRequest -Uri 'https://github.com/uniquecasper/DeskTranslate/releases/download/v2.2.0/DeskTranslate-2.2.0-Setup-x64.exe' -OutFile $previousInstaller
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           $actual = (Get-FileHash -LiteralPath $previousInstaller -Algorithm SHA256).Hash.ToLowerInvariant()
-          $expected = '9cce443bf825a9ef986d0846b5be30ac188743cd28137465784f29cabb5312d7'
-          if ($actual -ne $expected) { throw "Official v2.1.0 installer checksum mismatch: $actual" }
+          $expected = '39ecb3bf1ed797ff2dbde8bc6b27dbc381a47dcdc52cfdf4839ae94e797d1869'
+          if ($actual -ne $expected) { throw "Official v2.2.0 installer checksum mismatch: $actual" }
           "DESKTRANSLATE_PREVIOUS_INSTALLER=$previousInstaller" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
       - name: Qualify portable, installer upgrade, lifecycle and artifact privacy
         id: qualify_artifacts
@@ -121,9 +121,9 @@ jobs:
         run: |
           Copy-Item docs/soak-2h-hosted.json docs/soak-2h.json -Force
           Copy-Item docs/soak-chaos-hosted.json docs/soak-chaos.json -Force
-          python -c "import hashlib,json,subprocess; from pathlib import Path; from desktranslate import __version__; from tools.release_support import git_trace; root=Path.cwd(); p=root/'docs/manual-qualification.json'; d=json.loads(p.read_text()); d['version']=__version__; d['target']=__version__+' stable'; d['verdict']='Required 2.2.0 release gates passed on the hosted Windows runner; final stable artifacts are rebuilt from this exact commit.'; d['gates'].update({k:True for k in ('clean_windows','installer_upgrade','prolonged_media','media_pipeline','context_bounds')}); d['unsigned_release_approved']=True; d['unsigned_disclosure']='This release uses keyless Sigstore signatures and GitHub build attestations. No Authenticode publisher certificate is configured; Windows may show an unknown-publisher or SmartScreen warning.'; d['notes']='This report is generated only after the release workflow has passed pre-deployment tests, packaged startup, frozen runtime/OCR, installer-upgrade, artifact privacy, two-hour steady endurance and thirty-minute fault endurance on the exact 2.2.0 source.'; d['qualified_application_commit']=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(); d['qualified_application_sha256']=git_trace(root)['source_sha256']; p.write_text(json.dumps(d,indent=2)+'\n',encoding='utf-8')"
+          python -c "import hashlib,json,subprocess; from pathlib import Path; from desktranslate import __version__; from tools.release_support import git_trace; root=Path.cwd(); p=root/'docs/manual-qualification.json'; d=json.loads(p.read_text()); d['version']=__version__; d['target']=__version__+' stable'; d['verdict']='Required 2.2.1 release gates passed on the hosted Windows runner; final stable artifacts are rebuilt from this exact commit.'; d['gates'].update({k:True for k in ('clean_windows','installer_upgrade','prolonged_media','media_pipeline','context_bounds')}); d['unsigned_release_approved']=True; d['unsigned_disclosure']='This release uses keyless Sigstore signatures and GitHub build attestations. No Authenticode publisher certificate is configured; Windows may show an unknown-publisher or SmartScreen warning.'; d['notes']='This report is generated only after the release workflow has passed pre-deployment tests, packaged startup, frozen runtime/OCR, installer-upgrade, artifact privacy, two-hour steady endurance and thirty-minute fault endurance on the exact 2.2.1 source.'; d['qualified_application_commit']=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(); d['qualified_application_sha256']=git_trace(root)['source_sha256']; p.write_text(json.dumps(d,indent=2)+'\n',encoding='utf-8')"
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          python tools/build.py --installer --stable --tag v2.2.0
+          python tools/build.py --installer --stable --tag v2.2.1
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - name: Smoke final stable package
         shell: pwsh
@@ -172,7 +172,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $tag = 'v2.2.0'
+          $tag = 'v2.2.1'
           $existingTag = git tag --list $tag
           if ($LASTEXITCODE -ne 0) { throw 'Could not safely check whether the release tag already exists.' }
           if ($existingTag) { throw "Tag $tag already exists; refusing to retarget or overwrite it." }
@@ -189,13 +189,13 @@ jobs:
           foreach ($path in $evidence) {
             if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Missing release evidence: $path" }
           }
-          gh release create $tag @assets @evidence --title 'DeskTranslate 2.2.0' --notes-file docs/release-notes-2.2.0.md --target $env:GITHUB_SHA --repo $env:GITHUB_REPOSITORY
+          gh release create $tag @assets @evidence --title 'DeskTranslate 2.2.1' --notes-file docs/release-notes-2.2.1.md --target $env:GITHUB_SHA --repo $env:GITHUB_REPOSITORY
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - name: Preserve release evidence
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
-          name: desktranslate-2.2.0-release-evidence
+          name: desktranslate-2.2.1-release-evidence
           path: |
             dist/*.exe
             dist/*.zip

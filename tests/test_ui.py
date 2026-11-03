@@ -805,7 +805,6 @@ def test_local_model_probe_requires_a_specific_language_and_model(window, monkey
     assert "specific source language" in window.provider_status.text()
 
 
-
 def test_local_model_probe_preserves_configured_local_endpoint(window, monkeypatch):
     window.settings.provider_endpoints["ollama"] = "http://127.0.0.1:11435"
     window.provider_combo.setCurrentIndex(window.provider_combo.findData("ollama"))

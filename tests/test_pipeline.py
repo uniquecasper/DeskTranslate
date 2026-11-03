@@ -408,6 +408,70 @@ def test_failure_of_stale_request_does_not_break_new_generation():
         pipeline.stop()
 
 
+def test_stale_ocr_failure_restarts_worker_without_failing_new_generation():
+    engines = []
+    entered = Event()
+    release = Event()
+
+    class BlockingStaleOCR:
+        def recognize(self, image, language, vertical=False):
+            if not entered.is_set():
+                entered.set()
+                release.wait(3)
+                raise RuntimeError("stale OCR worker failure")
+            return OCRResult("C", confidence=0.99)
+
+        def close(self):
+            pass
+
+    def ocr_factory():
+        engine = BlockingStaleOCR()
+        engines.append(engine)
+        return engine
+
+    capture = Capture()
+    provider = SlowProvider()
+    provider.release.set()
+    pipeline = Pipeline(
+        Settings(quality="fast", recent_region=[0, 0, 120, 80]),
+        lambda: capture,
+        ocr_factory,
+        lambda: provider,
+    )
+    pipeline.start()
+    try:
+        until(entered.is_set)
+        stale_stamp = pipeline.session.stamp()
+        capture.color = 200
+        until(lambda: pipeline.session.stamp() != stale_stamp)
+        release.set()
+
+        events = []
+
+        def received_current_translation():
+            events.extend(pipeline.poll())
+            failure = next(
+                (event for event in events if event.state == SessionState.ERROR),
+                None,
+            )
+            if failure is not None:
+                pytest.fail(f"Stale OCR failure stopped the live session: {failure.error}")
+            return any(event.result is not None for event in events)
+
+        until(received_current_translation)
+        accepted = next(event for event in reversed(events) if event.result is not None)
+        assert accepted.source == "C"
+        assert accepted.result is not None
+        assert accepted.result.text == "C translated"
+        assert len(engines) >= 2
+        assert pipeline.counters["stale"] >= 1
+        assert pipeline.session.state == SessionState.WATCHING
+    finally:
+        release.set()
+        pipeline.stop()
+        assert pipeline.wait_closed()
+
+
 def test_stop_is_responsive_while_native_ocr_reaper_holds_join_lock():
     from threading import Lock
 

@@ -1,5 +1,27 @@
 # Changelog
 
+## 2.2.0 — 2026-11-03
+
+DeskTranslate 2.2 focuses on lower-overhead screen capture, fewer redundant translation requests and clearer latency diagnostics.
+
+- Validate an already-bound application window directly by its handle and process identity instead of repeatedly enumerating every visible window on each capture. Keep enumeration fallback, restart-following rules and pre/post capture occlusion checks.
+- Downsample frames before grayscale conversion in the visual change gate, reducing unnecessary per-frame image work while retaining regression coverage for small meaningful changes and noise.
+- Avoid repeating provider work for unchanged recognized subtitles while the background moves. Keep distinct punctuation, digit and text revisions eligible for translation.
+- Show the latest accepted translation's capture, OCR, stabilization, translation and delivery timings in the status tooltip. Display only allowlisted numeric durations; never expose recognized text, translated text, credentials or endpoints.
+- Retain rolling p50/p95/p99 diagnostics and add regression coverage for timing validation, window identity, occlusion, moving backgrounds and provider deduplication.
+- Revalidate the Windows portable package, packaged startup, frozen OCR/provider runtime, ownership recovery, dependency security and artifact privacy on the final main commit.
+
+## 2.1.0 — 2026-11-01
+
+DeskTranslate 2.1 adds selected-word dictionary details, stronger source-code preservation and local spaced-repetition review to the Windows screen-translation workflow.
+
+- Double-click a recognized source word to open an explicit dictionary lookup. Reuse an exact saved vocabulary match first; optional Free Dictionary API enrichment supplies English parts of speech, definitions and examples with source/license metadata.
+- Keep dictionary lookup data-minimal: only the selected word or phrase is sent to the configured translation provider when a saved target-language meaning is unavailable. Screenshots, full OCR transcripts and surrounding dialogue are not sent for word lookup.
+- Protect fenced code, inline code and high-confidence code-shaped lines from translation. Restore protected fragments byte-for-byte and reject provider responses that remove, duplicate or reorder protection markers.
+- Add local spaced-repetition review to Learning with Again, Hard, Good and Easy ratings, due-word counts, bounded scheduling, legacy database compatibility and atomic deletion of review state.
+- Keep vocabulary and review scheduling local; no screenshots, OCR transcripts, API keys or provider credentials are stored in the review database or sent as review metadata.
+- Publish the Windows installer and portable package with SHA-256 checksums, SBOMs, source/provenance metadata, Sigstore signatures and GitHub build attestations. Authenticode publisher signing is not configured; Windows may show an unknown-publisher or SmartScreen warning.
+
 ## 2.1.0 — 2026-11-01
 
 DeskTranslate 2.1 adds selected-word dictionary details, stronger source-code preservation and local spaced-repetition review to the Windows screen-translation workflow.

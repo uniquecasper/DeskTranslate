@@ -572,6 +572,19 @@ class Pipeline:
                         error="Recognition restarted after a worker failure. Retrying locally.",
                     )
                     continue
+                except Exception as error:
+                    # A frame may become stale while native OCR is running. Retire
+                    # that worker, but never let its failure stop the newer frame.
+                    self.ocr.close()
+                    if hasattr(self.ocr, "reap"):
+                        self.ocr.reap()  # type: ignore[attr-defined]
+                    self.ocr = None
+                    if not self.session.current(work.stamp):
+                        self.counters["stale"] += 1
+                        self.reset_text.set()
+                        continue
+                    self.fail(error, work.stamp)
+                    continue
                 timings.update(result.timings)
                 timings["ocr_ms"] = result.duration_ms
                 timings["ocr_call_ms"] = (time.perf_counter() - inference_start) * 1000

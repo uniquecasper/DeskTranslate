@@ -75,7 +75,7 @@ jobs:
         shell: pwsh
         run: |
           $previousInstaller = Join-Path $env:RUNNER_TEMP 'DeskTranslate-2.1.0-Setup-x64.exe'
-          Invoke-WebRequest -Uri 'https://github.com/DeskTranslate/DeskTranslate/releases/download/v2.1.0/DeskTranslate-2.1.0-Setup-x64.exe' -OutFile $previousInstaller
+          Invoke-WebRequest -Uri 'https://github.com/uniquecasper/DeskTranslate/releases/download/v2.1.0/DeskTranslate-2.1.0-Setup-x64.exe' -OutFile $previousInstaller
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           $actual = (Get-FileHash -LiteralPath $previousInstaller -Algorithm SHA256).Hash.ToLowerInvariant()
           $expected = '9cce443bf825a9ef986d0846b5be30ac188743cd28137465784f29cabb5312d7'

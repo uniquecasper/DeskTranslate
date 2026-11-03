@@ -8,7 +8,7 @@ Translate the dialogue in a game, subtitles in a video, a menu, or text in an im
 
 [2.2+ roadmap](docs/roadmap-v2.2.md) · [Word pronunciation](docs/pronunciation.md) · [Anki export](docs/anki-export.md) · [Release readiness](docs/release-readiness.md) · [Acceptance matrix](docs/validation.md) · [Non-invasive testing](docs/testing.md) · [Published releases](https://github.com/uniquecasper/DeskTranslate/releases) · [Getting started](#your-first-translation) · [Upgrade guide](docs/upgrade.md)
 
-**DeskTranslate 2.2.1** improves capture efficiency, repeated-subtitle handling and translation latency diagnostics. It includes the vocabulary, code-protection and spaced-repetition features from 2.1. [Download the Windows release](https://github.com/uniquecasper/DeskTranslate/releases/tag/v2.2.1). Release files include Sigstore signatures and GitHub attestations; they are not Authenticode publisher-signed, so Windows may show a SmartScreen warning.
+**DeskTranslate 2.2.1** adds configurable capture/idle pacing and pipeline timeouts, live-translation recovery after stale OCR failures, and a screen-free generation probe for selected Ollama/LM Studio models. It retains the 2.2.0 capture-efficiency and latency diagnostics plus the vocabulary, code-protection and spaced-repetition features from 2.1. [Download the Windows release](https://github.com/uniquecasper/DeskTranslate/releases/tag/v2.2.1). Release files include Sigstore signatures and GitHub attestations; they are not Authenticode publisher-signed, so Windows may show a SmartScreen warning.
 
 
 ![DeskTranslate 2 in its midnight mint theme, showing synthetic Japanese dialogue](docs/screenshots/translate-dark.png)

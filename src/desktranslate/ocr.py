@@ -26,6 +26,7 @@ from desktranslate.errors import (
     OCRInferenceError,
     OCRInitializationError,
     OCRLanguageMissingError,
+    OCRTimeoutError,
 )
 from desktranslate.languages import REGISTRY
 from desktranslate.layout import (
@@ -639,7 +640,12 @@ def ocr_process(connection: Any, name: str, language: str, directory: str) -> No
 
 
 class IsolatedOCR:
-    def __init__(self, name: str, language: str, directory: Path | None = None) -> None:
+    def __init__(
+        self, name: str, language: str, directory: Path | None = None, timeout: int = 30
+    ) -> None:
+        if type(timeout) is not int or not 3 <= timeout <= 120:
+            raise ValueError("OCR timeout must be between 3 and 120 seconds.")
+        self.timeout = float(timeout)
         self.lock = Lock()
         context = mp.get_context("spawn")
         self.connection, child = context.Pipe()
@@ -678,7 +684,8 @@ class IsolatedOCR:
             self.reap()
             raise OCRInitializationError() from None
 
-    def receive(self, cancel: Event, timeout: float = 25.0) -> tuple[str, Any]:
+    def receive(self, cancel: Event, timeout: float | None = None) -> tuple[str, Any]:
+        deadline = self.timeout if timeout is None else timeout
         start = time.monotonic()
         while not self.closed.is_set() and not self.cancelled.is_set() and not cancel.is_set():
             try:
@@ -688,9 +695,12 @@ class IsolatedOCR:
                 if self.closed.is_set() or self.cancelled.is_set() or cancel.is_set():
                     raise Cancelled() from None
                 raise OCRInferenceError() from None
-            if not self.process.is_alive() or time.monotonic() - start > timeout:
+            if not self.process.is_alive():
                 self.close()
                 raise OCRInferenceError()
+            if time.monotonic() - start > deadline:
+                self.close()
+                raise OCRTimeoutError()
         raise Cancelled()
 
     def recognize(

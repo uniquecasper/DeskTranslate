@@ -108,6 +108,36 @@ def test_stop_cancels_queued_start(window, monkeypatch):
     assert calls == []
 
 
+def test_recognition_interval_controls_keep_auto_or_safe_minimum(window):
+    window.capture_interval_spin.setValue(0)
+    assert window.capture_interval_spin.value() == 0
+    window.capture_interval_spin.setValue(1)
+    assert window.capture_interval_spin.value() == 50
+    window.idle_interval_spin.setValue(0)
+    assert window.idle_interval_spin.value() == 0
+    window.idle_interval_spin.setValue(1)
+    assert window.idle_interval_spin.value() == 100
+
+
+def test_recognition_timing_controls_are_persisted_and_restored(window):
+    window.capture_interval_spin.setValue(120)
+    window.idle_interval_spin.setValue(450)
+    window.capture_timeout_spin.setValue(18)
+    window.ocr_timeout_spin.setValue(42)
+    window.translation_timeout_spin.setValue(55)
+
+    window.save_recognition()
+
+    saved = window.store.load()
+    assert saved.capture_interval_ms == 120
+    assert saved.idle_interval_ms == 450
+    assert saved.capture_timeout == 18
+    assert saved.ocr_timeout == 42
+    assert saved.timeout == 55
+    assert window.capture_interval_spin.value() == 120
+    assert window.idle_interval_spin.value() == 450
+
+
 def test_custom_overlay_style_is_validated_and_persisted(window):
     controls = window.overlay_editor.controls
     controls["overlay_color"].setText("#ffdd22")

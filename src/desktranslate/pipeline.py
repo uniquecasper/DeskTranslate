@@ -11,11 +11,12 @@ from typing import TypeVar
 
 from PIL import Image
 
-from desktranslate.algorithms import PRESETS, FrameGate, preprocess
+from desktranslate.algorithms import PRESETS, FrameGate, QualityPreset, preprocess
 from desktranslate.code_detection import protect_code, remove_code
 from desktranslate.context import ContextEngine, TranslationCache, TranslationContext, cache_key
 from desktranslate.errors import (
     Cancelled,
+    CaptureTimeoutError,
     ConfigurationError,
     DeskTranslateError,
     OCRInferenceError,
@@ -67,6 +68,17 @@ ACTIVE = {
 # Budgets span replaced sessions. Waiting workers create no native/HTTP resources.
 OCR_SLOTS = BoundedSemaphore(2)
 PROVIDER_SLOTS = BoundedSemaphore(2)
+
+
+def _capture_cadence(
+    settings: Settings, preset: QualityPreset, gate: FrameGate, captured: float
+) -> float:
+    idle = gate.emitted and captured - gate.since > 3
+    if idle:
+        return (
+            settings.idle_interval_ms / 1000 if settings.idle_interval_ms else preset.idle_cadence
+        )
+    return settings.capture_interval_ms / 1000 if settings.capture_interval_ms else preset.cadence
 
 
 def acquire_slot(slot: BoundedSemaphore, cancel: Event) -> bool:
@@ -429,6 +441,9 @@ class Pipeline:
                         )
                     self.cancel.wait(0.5)
                     continue
+                capture_duration = time.perf_counter() - start
+                if capture_duration > self.settings.capture_timeout:
+                    raise CaptureTimeoutError()
                 actual = getattr(capture, "region", region) or region
                 with self.session.lock:
                     if capture_control != self.session.control_generation:
@@ -479,11 +494,7 @@ class Pipeline:
                     )
                     if self.once:
                         return
-                cadence = (
-                    preset.idle_cadence
-                    if gate.emitted and captured - gate.since > 3
-                    else preset.cadence
-                )
+                cadence = _capture_cadence(self.settings, preset, gate, captured)
                 self.cancel.wait(cadence)
         except Exception as error:
             self.fail(error)

@@ -12,6 +12,10 @@ class CaptureError(DeskTranslateError):
     message = "This region cannot be captured. Try windowed mode or select another region."
 
 
+class CaptureTimeoutError(CaptureError):
+    message = "Screen capture took too long. Check the selected display or application and retry."
+
+
 class DisplayChangedError(CaptureError):
     message = "Your display layout changed. Select the region again."
 
@@ -30,6 +34,12 @@ class OCRLanguageMissingError(OCRInitializationError):
 
 class OCRInferenceError(DeskTranslateError):
     message = "Recognition failed. Try a larger region or another recognition engine."
+
+
+class OCRTimeoutError(OCRInferenceError):
+    message = (
+        "Recognition exceeded its time limit. Try a smaller region or a faster recognition preset."
+    )
 
 
 class TranslationError(DeskTranslateError):

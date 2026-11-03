@@ -53,6 +53,8 @@ For a moving game or video window, choose **Choose application**, then **Region 
 
 Use a tight text region for changing video backgrounds. DeskTranslate keeps the overlay outside that region to prevent it from translating itself. If a region leaves no space for an overlay, use a smaller region or one-shot mode; the result can appear in the main window.
 
+In **Recognition → Tune for your content**, capture and idle intervals can follow the quality preset automatically or use your own millisecond values. Stage deadlines are configurable separately for capture, OCR and translation. OCR workers are isolated and retired when their deadline expires; provider requests are cancellable. A capture deadline is checked when the capture backend returns, so it cannot forcibly interrupt a blocked native capture call. Defaults are conservative and automatic pacing remains the recommended starting point.
+
 The status at the bottom of every page tells you whether capture is running, paused or stopped. Pause becomes **Resume**; a failed request offers **Retry translation**. If a language pack is missing, review its size and choose **Install pack and start live** or **Install pack and translate once**. Downloads start only after that click. Stop, cancellation or a settings change cancels automatic continuation.
 
 | Action | Default shortcut |

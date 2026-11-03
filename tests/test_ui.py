@@ -872,7 +872,11 @@ def test_local_model_probe_handles_provider_construction_failure(window, monkeyp
     window.provider_combo.setCurrentIndex(window.provider_combo.findData("ollama"))
     window.model_combo.setCurrentText("qwen2.5:1.5b")
     calls = []
-    monkeypatch.setattr(window, "provider_factory", lambda snapshot: (_ for _ in ()).throw(ValueError("bad endpoint")))
+    monkeypatch.setattr(
+        window,
+        "provider_factory",
+        lambda snapshot: (_ for _ in ()).throw(ValueError("bad endpoint")),
+    )
     monkeypatch.setattr(window, "job", lambda *args, **kwargs: calls.append(True))
 
     window.test_local_model()
@@ -919,7 +923,9 @@ def test_local_model_probe_discards_stale_async_result(window, monkeypatch):
     window.provider_combo.setCurrentIndex(window.provider_combo.findData("ollama"))
     window.model_combo.setCurrentText("qwen2.5:1.5b")
     pending = []
-    monkeypatch.setattr(window, "job", lambda operation, callback: pending.append((operation, callback)))
+    monkeypatch.setattr(
+        window, "job", lambda operation, callback: pending.append((operation, callback))
+    )
 
     window.test_local_model()
     assert len(pending) == 1

@@ -82,6 +82,7 @@ jobs:
           if ($actual -ne $expected) { throw "Official v2.1.0 installer checksum mismatch: $actual" }
           "DESKTRANSLATE_PREVIOUS_INSTALLER=$previousInstaller" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
       - name: Qualify portable, installer upgrade, lifecycle and artifact privacy
+        id: qualify_artifacts
         shell: pwsh
         run: |
           ./tools/qualify_portable.ps1 -ModelDataDirectory "$env:DESKTRANSLATE_DATA_DIR/models"
@@ -92,7 +93,7 @@ jobs:
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - name: Prepare verified endurance models
         id: prepare_endurance_models
-        if: ${{ !cancelled() && steps.compile.outcome == 'success' && steps.prepare_ocr.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.compile.outcome == 'success' && steps.prepare_ocr.outcome == 'success' && steps.qualify_artifacts.outcome == 'success' }}
         shell: pwsh
         run: |
           python -c "from threading import Event; from desktranslate.ocr import ModelManager; from tools.release_support import require_release_condition; manager=ModelManager(); manager.install('en',Event(),lambda *args: None); require_release_condition(manager.installed('en',verify=True), 'English OCR model verification failed')"

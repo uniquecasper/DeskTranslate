@@ -219,6 +219,10 @@ def test_runtime_errors_do_not_reopen_main_window(window, monkeypatch):
     window.poll_pipeline()
     assert not opened
     assert "key" in window.status_label.text().lower()
+    assert window.pause_button.text() == "Retry translation"
+    assert window.pause_button.isEnabled()
+    assert window.overlay.pause_button.text() == "Retry translation"
+    assert window.overlay.pause_button.isEnabled()
 
 
 @pytest.mark.parametrize("change", ["pixels", "blank", "context"])
@@ -347,6 +351,11 @@ def test_session_transcript_is_opt_in_and_cleared_without_persisting_text(window
     )
     window.poll_pipeline()
     assert not window.transcript_page.transcript.entries
+    assert window.result_source.text() == "PRIVATE_SOURCE"
+    assert window.result_translation.text() == "PRIVATE_TRANSLATION"
+    assert window.overlay.source.text() == "PRIVATE_SOURCE"
+    assert window.overlay.translation.text() == "PRIVATE_TRANSLATION"
+    assert window.overlay.isVisible()
     window.transcript_page.enable.setChecked(True)
     pipeline.enqueue(
         PipelineEvent(

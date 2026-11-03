@@ -35,13 +35,13 @@ $workspace = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $version = (& python -c 'from desktranslate import __version__; print(__version__)').Trim()
 if ($LASTEXITCODE) { throw 'Canonical version lookup failed' }
 $setup = Join-Path $workspace "dist/DeskTranslate-$version-Setup-x64.exe"
-$expectedPreviousVersion = '2.0.0'
-$expectedPreviousInstallerSha256 = '2c2aab018c7e34b38fe4b04f3ffb099c6707fbd63d14dbd21546effe43443fe5'
-if (-not $PreviousInstaller) { throw 'A verified DeskTranslate 2.0.0 installer is required for 2.0.1 qualification' }
+$expectedPreviousVersion = '2.1.0'
+$expectedPreviousInstallerSha256 = '9cce443bf825a9ef986d0846b5be30ac188743cd28137465784f29cabb5312d7'
+if (-not $PreviousInstaller) { throw 'A verified DeskTranslate 2.1.0 installer is required for 2.2.0 qualification' }
 $PreviousInstaller = [IO.Path]::GetFullPath($PreviousInstaller)
 if (-not (Test-Path -LiteralPath $PreviousInstaller -PathType Leaf)) { throw 'Previous installer file is missing' }
 $actualPreviousInstallerSha256 = (Get-FileHash -LiteralPath $PreviousInstaller -Algorithm SHA256).Hash.ToLowerInvariant()
-if ($actualPreviousInstallerSha256 -ne $expectedPreviousInstallerSha256) { throw 'Previous installer SHA-256 does not match the official v2.0.0 release asset' }
+if ($actualPreviousInstallerSha256 -ne $expectedPreviousInstallerSha256) { throw 'Previous installer SHA-256 does not match the official v2.1.0 release asset' }
 $installRoot = [IO.Path]::GetFullPath((Join-Path $workspace '.audit/installer qualification/翻訳 app'))
 $dataRoot = [IO.Path]::GetFullPath((Join-Path $workspace '.audit/installer qualification/設定 data'))
 $workingRoot = [IO.Path]::GetFullPath((Join-Path $workspace '.audit/installer qualification/空の 作業'))
@@ -108,13 +108,13 @@ $options = @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/TASKS=desktopicon'
 try {
     Run-Probe $PreviousInstaller $options
     $previousExecutable = Join-Path $installRoot 'DeskTranslate.exe'
-    if (-not (Test-Path -LiteralPath $previousExecutable)) { throw 'The v2.0.0 installer did not create the expected executable' }
+    if (-not (Test-Path -LiteralPath $previousExecutable)) { throw 'The v2.1.0 installer did not create the expected executable' }
     $previousMetadata = (Get-Item -LiteralPath $previousExecutable).VersionInfo
     $previousUninstallMetadata = Get-ItemProperty -LiteralPath $registry
     if ($previousMetadata.ProductVersion -ne $expectedPreviousVersion -or
         $previousMetadata.ProductName -ne 'DeskTranslate' -or
         $previousUninstallMetadata.DisplayVersion -ne $expectedPreviousVersion) {
-        throw 'The installed previous executable/uninstall registration is not DeskTranslate 2.0.0'
+        throw 'The installed previous executable/uninstall registration is not DeskTranslate 2.1.0'
     }
     Run-Probe $previousExecutable @('--smoke-test')
     $results.previous_version_detected = $previousMetadata.ProductVersion
@@ -124,7 +124,7 @@ try {
         (Get-FileHash -LiteralPath (Join-Path $dataRoot "models/$_")).Hash -ne $modelHashes[$_]
     }).Count -eq 0
     if (-not $results.previous_settings_preserved -or -not $results.previous_models_preserved) {
-        throw 'The v2.0.0 installation did not preserve the authored settings/models'
+        throw 'The v2.1.0 installation did not preserve the authored settings/models'
     }
     $results.previous_version_upgrade = $true
     Run-Probe $setup $options

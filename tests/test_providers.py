@@ -1,3 +1,4 @@
+import asyncio
 import json
 
 import httpx
@@ -7,6 +8,7 @@ from desktranslate.errors import (
     ModelNotFoundError,
     ProviderAuthenticationError,
     ProviderRateLimitError,
+    ProviderTimeoutError,
     TranslationError,
 )
 from desktranslate.models import ContextPair, TranslationRequest
@@ -236,6 +238,28 @@ def test_ollama_rejects_incomplete_or_truncated_generation(completion):
     try:
         with pytest.raises(TranslationError, match="incomplete"):
             provider.translate(TranslationRequest("Authored source", "en", "es", "test"))
+    finally:
+        provider.close()
+
+
+def test_provider_timeout_cancels_slow_request_without_returning_late_result():
+    class SlowTransport(httpx.AsyncBaseTransport):
+        async def handle_async_request(self, request):
+            await asyncio.sleep(0.2)
+            return httpx.Response(
+                200,
+                json={"choices": [{"message": {"content": "Late translation"}}]},
+            )
+
+    provider = create_provider(
+        "custom",
+        endpoint="https://example.com/v1",
+        timeout=0.05,
+        transport=SlowTransport(),
+    )
+    try:
+        with pytest.raises(ProviderTimeoutError):
+            provider.call("GET", "/health")
     finally:
         provider.close()
 

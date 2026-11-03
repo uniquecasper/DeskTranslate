@@ -104,6 +104,10 @@ class Settings:
     close_to_tray: bool = False
     context_entries: int = 8
     context_chars: int = 6000
+    capture_interval_ms: int = 0
+    idle_interval_ms: int = 0
+    capture_timeout: int = 15
+    ocr_timeout: int = 30
     timeout: int = 25
     profiles: dict[str, dict[str, Any]] = field(default_factory=dict)
 
@@ -156,6 +160,10 @@ class Settings:
         for name, low, high in [
             ("overlay_size", 12, 64),
             ("overlay_opacity", 30, 100),
+            ("capture_interval_ms", 0, 1000),
+            ("idle_interval_ms", 0, 5000),
+            ("capture_timeout", 3, 120),
+            ("ocr_timeout", 3, 120),
             ("timeout", 3, 120),
             ("context_entries", 0, 20),
             ("context_chars", 0, 12000),
@@ -177,6 +185,10 @@ class Settings:
             value = getattr(self, name)
             if type(value) is not int or not low <= value <= high:
                 raise ValueError("Invalid range")
+        if self.capture_interval_ms not in (0,) and self.capture_interval_ms < 50:
+            raise ValueError("Capture interval must be automatic or at least 50 ms.")
+        if self.idle_interval_ms not in (0,) and self.idle_interval_ms < 100:
+            raise ValueError("Idle interval must be automatic or at least 100 ms.")
         for name in (
             "vertical",
             "onboarding_done",

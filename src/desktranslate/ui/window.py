@@ -640,8 +640,58 @@ class MainWindow(QMainWindow):
             "Japanese: read columns right to left, keep captions upright and avoid repeating nearby kana readings. Other languages retain experimental column ordering. Small or stylized text can still need a tighter region."
         )
         self.vertical_check.setChecked(self.settings.vertical)
+        self.capture_interval_spin = QSpinBox()
+        self.capture_interval_spin.setRange(0, 1000)
+        self.capture_interval_spin.setSingleStep(50)
+        self.capture_interval_spin.valueChanged.connect(
+            lambda value: self.capture_interval_spin.setValue(50) if 0 < value < 50 else None
+        )
+        self.capture_interval_spin.setSuffix(" ms")
+        self.capture_interval_spin.setSpecialValueText("Auto · performance preset")
+        self.capture_interval_spin.setValue(self.settings.capture_interval_ms)
+        self.capture_interval_spin.setToolTip(
+            "How often to sample the selected screen region. Automatic follows the chosen performance preset."
+        )
+        self.idle_interval_spin = QSpinBox()
+        self.idle_interval_spin.setRange(0, 5000)
+        self.idle_interval_spin.setSingleStep(100)
+        self.idle_interval_spin.valueChanged.connect(
+            lambda value: self.idle_interval_spin.setValue(100) if 0 < value < 100 else None
+        )
+        self.idle_interval_spin.setSuffix(" ms")
+        self.idle_interval_spin.setSpecialValueText("Auto · performance preset")
+        self.idle_interval_spin.setValue(self.settings.idle_interval_ms)
+        self.idle_interval_spin.setToolTip(
+            "Sampling interval while the subtitle has remained unchanged. Automatic follows the performance preset."
+        )
+        self.capture_timeout_spin = QSpinBox()
+        self.capture_timeout_spin.setRange(3, 120)
+        self.capture_timeout_spin.setSuffix(" s")
+        self.capture_timeout_spin.setValue(self.settings.capture_timeout)
+        self.capture_timeout_spin.setToolTip(
+            "If a capture call takes longer than this, the session fails safely after the backend returns. This does not forcibly interrupt a blocked native capture call."
+        )
+        self.ocr_timeout_spin = QSpinBox()
+        self.ocr_timeout_spin.setRange(3, 120)
+        self.ocr_timeout_spin.setSuffix(" s")
+        self.ocr_timeout_spin.setValue(self.settings.ocr_timeout)
+        self.ocr_timeout_spin.setToolTip(
+            "Maximum wait for the isolated OCR worker to initialize or recognize. An expired worker is terminated and replaced only after cleanup."
+        )
+        self.translation_timeout_spin = QSpinBox()
+        self.translation_timeout_spin.setRange(3, 120)
+        self.translation_timeout_spin.setSuffix(" s")
+        self.translation_timeout_spin.setValue(self.settings.timeout)
+        self.translation_timeout_spin.setToolTip(
+            "Maximum time allowed for one provider request. Stop and pause remain cancellable."
+        )
         form.addRow("Performance", self.quality_combo)
         form.addRow("Image treatment", self.preprocess_combo)
+        form.addRow("Capture interval", self.capture_interval_spin)
+        form.addRow("Idle interval", self.idle_interval_spin)
+        form.addRow("Capture timeout", self.capture_timeout_spin)
+        form.addRow("OCR timeout", self.ocr_timeout_spin)
+        form.addRow("Translation timeout", self.translation_timeout_spin)
         form.addRow(self.vertical_check)
         layout.addLayout(form)
         layout.addWidget(
@@ -1492,7 +1542,7 @@ class MainWindow(QMainWindow):
                     if snapshot.capture_mode == "window"
                     else MSSCapture(snapshot.display_signature)
                 ),
-                lambda: IsolatedOCR(snapshot.ocr, snapshot.source),
+                lambda: IsolatedOCR(snapshot.ocr, snapshot.source, timeout=snapshot.ocr_timeout),
                 provider_factory,
                 once,
             )
@@ -2095,6 +2145,11 @@ class MainWindow(QMainWindow):
         updated.quality = self.quality_combo.currentData()
         updated.preprocessing = self.preprocess_combo.currentData()
         updated.vertical = self.vertical_check.isChecked()
+        updated.capture_interval_ms = self.capture_interval_spin.value()
+        updated.idle_interval_ms = self.idle_interval_spin.value()
+        updated.capture_timeout = self.capture_timeout_spin.value()
+        updated.ocr_timeout = self.ocr_timeout_spin.value()
+        updated.timeout = self.translation_timeout_spin.value()
         if self.commit_settings(updated):
             self.notice("Recognition settings applied.")
 
@@ -2196,6 +2251,11 @@ class MainWindow(QMainWindow):
             )
         )
         self.vertical_check.setChecked(self.settings.vertical)
+        self.capture_interval_spin.setValue(self.settings.capture_interval_ms)
+        self.idle_interval_spin.setValue(self.settings.idle_interval_ms)
+        self.capture_timeout_spin.setValue(self.settings.capture_timeout)
+        self.ocr_timeout_spin.setValue(self.settings.ocr_timeout)
+        self.translation_timeout_spin.setValue(self.settings.timeout)
         self.click_check.setChecked(self.settings.overlay_click_through)
         self.font_spin.setValue(self.settings.overlay_size)
         self.opacity_spin.setValue(self.settings.overlay_opacity)

@@ -518,6 +518,11 @@ class MainWindow(QMainWindow):
         layout.addLayout(row)
         self.provider_status = label("No connection test yet.", "muted")
         layout.addWidget(self.provider_status)
+        self.model_test_button = button("Test selected model", self.test_local_model)
+        self.model_test_button.setToolTip(
+            "Runs a bundled sample through the selected local model. This checks generation, not translation quality."
+        )
+        layout.addWidget(self.model_test_button)
         layout.addWidget(button("Find local AI servers", self.detect_local))
         layout.addWidget(button("Cancel setup task", self.cancel_setup))
         page.addWidget(frame)
@@ -1829,6 +1834,9 @@ class MainWindow(QMainWindow):
         selected = self.provider_combo.currentData()
         spec = SPECS[selected]
         custom = selected in {"custom", "libre", "deepl"}
+        self.model_test_button.setVisible(
+            spec.capabilities.local and spec.capabilities.model_discovery
+        )
         self.endpoint_edit.setVisible(custom)
         self.openai_api_combo.setVisible(selected == "openai")
         self.key_edit.setVisible(spec.capabilities.requires_key or selected in {"custom", "libre"})
@@ -1993,6 +2001,103 @@ class MainWindow(QMainWindow):
                     if result
                     else "Connected. No model selection needed, or no local models installed yet."
                 )
+
+        self.job(operation, complete)
+
+    def test_local_model(self) -> None:
+        """Run a bundled, screen-free generation probe against a selected local model."""
+        selected = self.provider_combo.currentData()
+        if selected not in {"ollama", "lmstudio"}:
+            self.provider_status.setText("Choose Ollama or LM Studio to test a local model.")
+            return
+
+        model = self.model_combo.currentText().strip()
+        if not model:
+            self.provider_status.setText("Choose a model from the local model list first.")
+            return
+
+        source = self.source_combo.currentData()
+        target = self.target_combo.currentData()
+        if not source or source == "auto":
+            self.provider_status.setText(
+                "Choose a specific source language before testing a local model."
+            )
+            return
+        if not target or source == target:
+            self.provider_status.setText(
+                "Choose different source and translation languages before testing."
+            )
+            return
+
+        from desktranslate.ui.onboarding import SAMPLES
+
+        sample = SAMPLES.get(source)
+        if sample is None:
+            self.provider_status.setText(
+                "No bundled test sentence exists for this source language. "
+                "Choose one of the managed sample languages to test the model."
+            )
+            return
+
+        snapshot = copy.deepcopy(self.settings)
+        configured_endpoint = snapshot.provider_endpoints.get(selected, "")
+        if not configured_endpoint and snapshot.provider == selected:
+            configured_endpoint = snapshot.endpoint
+        snapshot.provider = selected
+        snapshot.endpoint = configured_endpoint or SPECS[selected].endpoint
+        snapshot.model = model
+        snapshot.source = source
+        snapshot.target = target
+        snapshot.provider_models[selected] = model
+        snapshot.provider_endpoints[selected] = snapshot.endpoint
+        try:
+            snapshot.validate()
+            factory = self.provider_factory(snapshot)
+        except (DeskTranslateError, ValueError) as error:
+            self.provider_status.setText(str(error))
+            return
+
+        revision = self.settings_revision
+        controls = (selected, model, source, target)
+        sample_text = sample[1]
+        self.provider_status.setText("Testing the selected local model with a bundled sample…")
+
+        def operation() -> object:
+            provider = factory()
+            provider.cancelled = self.jobs.cancel
+            try:
+                result = provider.translate(TranslationRequest(sample_text, source, target, model))
+                output = result.text.strip()
+                if not output:
+                    raise DeskTranslateError("The model returned an empty response.")
+                return output
+            finally:
+                provider.close()
+
+        def complete(result: object, error: str) -> None:
+            current = (
+                self.provider_combo.currentData(),
+                self.model_combo.currentText().strip(),
+                self.source_combo.currentData(),
+                self.target_combo.currentData(),
+            )
+            if self.settings_revision != revision or current != controls:
+                self.provider_status.setText(
+                    "Setup changed during the model test. Run the test again for the current selection."
+                )
+                return
+            if error:
+                self.provider_status.setText("Model test failed · " + error)
+            elif isinstance(result, str) and result:
+                self.provider_status.setText(
+                    f"Generation succeeded · {model} · "
+                    f"{REGISTRY[source].name} → {REGISTRY[target].name}\n"
+                    f"Sample: {sample_text}\n"
+                    f"Model output: {result}\n"
+                    "This confirms that the model responds; review translation accuracy manually."
+                )
+            else:
+                self.provider_status.setText("The selected model returned no usable text.")
 
         self.job(operation, complete)
 

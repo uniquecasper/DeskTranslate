@@ -734,3 +734,282 @@ def test_translation_status_tooltip_exposes_latest_numeric_stages_only(window):
     assert "Process round-trip 180.5" in tooltip
     assert "Provider 325.0" in tooltip
     assert "PRIVATE" not in tooltip
+
+
+@pytest.mark.parametrize(
+    ("provider_name", "expected_endpoint"),
+    [
+        ("ollama", "http://localhost:11434"),
+        ("lmstudio", "http://localhost:1234/v1"),
+    ],
+)
+def test_local_model_probe_uses_bundled_sample_without_saving_or_sending_screen_content(
+    window, monkeypatch, provider_name, expected_endpoint
+):
+    from desktranslate.models import TranslationResult
+
+    window.provider_combo.setCurrentIndex(window.provider_combo.findData(provider_name))
+    window.model_combo.setCurrentText("qwen2.5:1.5b")
+    calls = []
+    closed = []
+
+    class FakeProvider:
+        def translate(self, request):
+            calls.append(request)
+            return TranslationResult("明日また会いましょう。")
+
+        def close(self):
+            closed.append(True)
+
+    provider = FakeProvider()
+    snapshots = []
+    monkeypatch.setattr(
+        window,
+        "provider_factory",
+        lambda snapshot: snapshots.append(snapshot) or (lambda: provider),
+    )
+
+    def run_inline(operation, callback):
+        try:
+            callback(operation(), "")
+        except Exception as error:
+            callback(None, str(error))
+
+    monkeypatch.setattr(window, "job", run_inline)
+    saved_provider = window.store.load().provider
+
+    window.test_local_model()
+
+    assert len(calls) == 1
+    assert calls[0].text == "明日、またここで会おう。"
+    assert calls[0].source == "ja"
+    assert calls[0].target == "en"
+    assert calls[0].model == "qwen2.5:1.5b"
+    assert snapshots[0].provider == provider_name
+    assert snapshots[0].endpoint == expected_endpoint
+    assert closed == [True]
+    assert window.store.load().provider == saved_provider
+    assert "Generation succeeded" in window.provider_status.text()
+    assert "review translation accuracy manually" in window.provider_status.text()
+
+
+def test_local_model_probe_requires_a_specific_language_and_model(window, monkeypatch):
+    # Language changes commit settings and restore the saved provider selection.
+    # Set the source first, then select LM Studio for this validation case.
+    window.source_combo.setCurrentIndex(window.source_combo.findData("auto"))
+    window.provider_combo.setCurrentIndex(window.provider_combo.findData("lmstudio"))
+    calls = []
+    monkeypatch.setattr(window, "job", lambda *args, **kwargs: calls.append(True))
+
+    window.model_combo.setCurrentText("")
+    window.test_local_model()
+    assert not calls
+    assert "Choose a model" in window.provider_status.text()
+
+    window.model_combo.setCurrentText("test-model")
+    window.test_local_model()
+    assert not calls
+    assert "specific source language" in window.provider_status.text()
+
+
+def test_local_model_probe_preserves_configured_local_endpoint(window, monkeypatch):
+    window.settings.provider_endpoints["ollama"] = "http://127.0.0.1:11435"
+    window.provider_combo.setCurrentIndex(window.provider_combo.findData("ollama"))
+    window.model_combo.setCurrentText("qwen2.5:1.5b")
+    snapshots = []
+
+    class FakeProvider:
+        def translate(self, request):
+            from desktranslate.models import TranslationResult
+
+            return TranslationResult("Tomorrow, let's meet here again.")
+
+        def close(self):
+            pass
+
+    provider = FakeProvider()
+    monkeypatch.setattr(
+        window,
+        "provider_factory",
+        lambda snapshot: snapshots.append(snapshot) or (lambda: provider),
+    )
+
+    def run_inline(operation, callback):
+        try:
+            callback(operation(), "")
+        except Exception as error:
+            callback(None, str(error))
+
+    monkeypatch.setattr(window, "job", run_inline)
+    window.test_local_model()
+
+    assert snapshots[0].endpoint == "http://127.0.0.1:11435"
+    assert snapshots[0].provider_endpoints["ollama"] == "http://127.0.0.1:11435"
+
+
+def test_local_model_probe_executes_with_lm_studio(window, monkeypatch):
+    from desktranslate.models import TranslationResult
+
+    window.source_combo.setCurrentIndex(window.source_combo.findData("ja"))
+    window.target_combo.setCurrentIndex(window.target_combo.findData("en"))
+    window.provider_combo.setCurrentIndex(window.provider_combo.findData("lmstudio"))
+    window.model_combo.setCurrentText("qwen2.5:1.5b")
+    requests = []
+    closed = []
+
+    class FakeProvider:
+        def translate(self, request):
+            requests.append(request)
+            return TranslationResult("We will meet here again tomorrow.")
+
+        def close(self):
+            closed.append(True)
+
+    provider = FakeProvider()
+    snapshots = []
+    monkeypatch.setattr(
+        window,
+        "provider_factory",
+        lambda snapshot: snapshots.append(snapshot) or (lambda: provider),
+    )
+
+    def run_inline(operation, callback):
+        try:
+            callback(operation(), "")
+        except Exception as error:
+            callback(None, str(error))
+
+    monkeypatch.setattr(window, "job", run_inline)
+
+    window.test_local_model()
+
+    assert len(requests) == 1
+    assert requests[0].source == "ja"
+    assert requests[0].target == "en"
+    assert requests[0].model == "qwen2.5:1.5b"
+    assert snapshots[0].provider == "lmstudio"
+    assert snapshots[0].endpoint == "http://localhost:1234/v1"
+    assert closed == [True]
+    assert "Generation succeeded" in window.provider_status.text()
+
+
+def test_local_model_probe_rejects_identical_languages(window, monkeypatch):
+    window.provider_combo.setCurrentIndex(window.provider_combo.findData("ollama"))
+    window.model_combo.setCurrentText("qwen2.5:1.5b")
+    # The normal UI rejects an identical pair immediately and restores the
+    # previous selection. Block signals to exercise the probe's defensive guard
+    # against an invalid/stale control state.
+    window.source_combo.blockSignals(True)
+    window.target_combo.blockSignals(True)
+    # English is present in both the managed OCR source list and target list.
+    # Use it to create a valid, identical pair in the defensive guard test.
+    window.source_combo.setCurrentIndex(window.source_combo.findData("en"))
+    window.target_combo.setCurrentIndex(window.target_combo.findData("en"))
+    window.source_combo.blockSignals(False)
+    window.target_combo.blockSignals(False)
+    assert window.source_combo.currentData() == "en"
+    assert window.target_combo.currentData() == "en"
+    calls = []
+    monkeypatch.setattr(window, "job", lambda *args, **kwargs: calls.append(True))
+
+    window.test_local_model()
+
+    assert not calls
+    assert "different source and translation languages" in window.provider_status.text()
+
+
+def test_local_model_probe_rejects_source_without_bundled_sample(window, monkeypatch):
+    from desktranslate.ui import onboarding
+
+    window.provider_combo.setCurrentIndex(window.provider_combo.findData("ollama"))
+    window.model_combo.setCurrentText("qwen2.5:1.5b")
+    monkeypatch.setattr(onboarding, "SAMPLES", {})
+    calls = []
+    monkeypatch.setattr(window, "job", lambda *args, **kwargs: calls.append(True))
+
+    window.test_local_model()
+
+    assert not calls
+    assert "No bundled test sentence" in window.provider_status.text()
+
+
+def test_local_model_probe_handles_provider_construction_failure(window, monkeypatch):
+    window.provider_combo.setCurrentIndex(window.provider_combo.findData("ollama"))
+    window.model_combo.setCurrentText("qwen2.5:1.5b")
+    calls = []
+    monkeypatch.setattr(
+        window,
+        "provider_factory",
+        lambda snapshot: (_ for _ in ()).throw(ValueError("bad endpoint")),
+    )
+    monkeypatch.setattr(window, "job", lambda *args, **kwargs: calls.append(True))
+
+    window.test_local_model()
+
+    assert not calls
+    assert "bad endpoint" in window.provider_status.text()
+
+
+@pytest.mark.parametrize("failure", ["empty", "exception"])
+def test_local_model_probe_closes_provider_on_bad_output(window, monkeypatch, failure):
+    from desktranslate.errors import DeskTranslateError
+    from desktranslate.models import TranslationResult
+
+    window.provider_combo.setCurrentIndex(window.provider_combo.findData("ollama"))
+    window.model_combo.setCurrentText("qwen2.5:1.5b")
+    closed = []
+
+    class FakeProvider:
+        def translate(self, request):
+            if failure == "exception":
+                raise DeskTranslateError("local server rejected the request")
+            return TranslationResult("   ")
+
+        def close(self):
+            closed.append(True)
+
+    provider = FakeProvider()
+    monkeypatch.setattr(window, "provider_factory", lambda snapshot: lambda: provider)
+
+    def run_inline(operation, callback):
+        try:
+            callback(operation(), "")
+        except Exception as error:
+            callback(None, str(error))
+
+    monkeypatch.setattr(window, "job", run_inline)
+    window.test_local_model()
+
+    assert closed == [True]
+    assert "Model test failed" in window.provider_status.text()
+
+
+def test_local_model_probe_discards_stale_async_result(window, monkeypatch):
+    window.provider_combo.setCurrentIndex(window.provider_combo.findData("ollama"))
+    window.model_combo.setCurrentText("qwen2.5:1.5b")
+    pending = []
+    monkeypatch.setattr(
+        window, "job", lambda operation, callback: pending.append((operation, callback))
+    )
+
+    window.test_local_model()
+    assert len(pending) == 1
+
+    window.model_combo.setCurrentText("different-model")
+    pending[0][1]("stale output", "")
+
+    assert "Setup changed during the model test" in window.provider_status.text()
+
+
+def test_local_model_probe_button_visibility_tracks_supported_providers(window):
+    window.provider_combo.setCurrentIndex(window.provider_combo.findData("google"))
+    assert window.model_test_button.isHidden()
+
+    window.provider_combo.setCurrentIndex(window.provider_combo.findData("ollama"))
+    assert not window.model_test_button.isHidden()
+
+    window.provider_combo.setCurrentIndex(window.provider_combo.findData("lmstudio"))
+    assert not window.model_test_button.isHidden()
+
+    window.provider_combo.setCurrentIndex(window.provider_combo.findData("custom"))
+    assert window.model_test_button.isHidden()

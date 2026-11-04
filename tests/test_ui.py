@@ -736,12 +736,19 @@ def test_translation_status_tooltip_exposes_latest_numeric_stages_only(window):
     assert "PRIVATE" not in tooltip
 
 
+@pytest.mark.parametrize(
+    ("provider_name", "expected_endpoint"),
+    [
+        ("ollama", "http://localhost:11434"),
+        ("lmstudio", "http://localhost:1234/v1"),
+    ],
+)
 def test_local_model_probe_uses_bundled_sample_without_saving_or_sending_screen_content(
-    window, monkeypatch
+    window, monkeypatch, provider_name, expected_endpoint
 ):
     from desktranslate.models import TranslationResult
 
-    window.provider_combo.setCurrentIndex(window.provider_combo.findData("ollama"))
+    window.provider_combo.setCurrentIndex(window.provider_combo.findData(provider_name))
     window.model_combo.setCurrentText("qwen2.5:1.5b")
     calls = []
     closed = []
@@ -778,8 +785,8 @@ def test_local_model_probe_uses_bundled_sample_without_saving_or_sending_screen_
     assert calls[0].source == "ja"
     assert calls[0].target == "en"
     assert calls[0].model == "qwen2.5:1.5b"
-    assert snapshots[0].provider == "ollama"
-    assert snapshots[0].endpoint == "http://localhost:11434"
+    assert snapshots[0].provider == provider_name
+    assert snapshots[0].endpoint == expected_endpoint
     assert closed == [True]
     assert window.store.load().provider == saved_provider
     assert "Generation succeeded" in window.provider_status.text()

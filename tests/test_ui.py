@@ -847,7 +847,6 @@ def test_local_model_probe_preserves_configured_local_endpoint(window, monkeypat
     assert snapshots[0].provider_endpoints["ollama"] == "http://127.0.0.1:11435"
 
 
-
 def test_local_model_probe_executes_with_lm_studio(window, monkeypatch):
     from desktranslate.models import TranslationResult
 
@@ -892,6 +891,7 @@ def test_local_model_probe_executes_with_lm_studio(window, monkeypatch):
     assert snapshots[0].endpoint == "http://localhost:1234/v1"
     assert closed == [True]
     assert "Generation succeeded" in window.provider_status.text()
+
 
 def test_local_model_probe_rejects_identical_languages(window, monkeypatch):
     window.provider_combo.setCurrentIndex(window.provider_combo.findData("ollama"))

@@ -843,8 +843,15 @@ def test_local_model_probe_preserves_configured_local_endpoint(window, monkeypat
 def test_local_model_probe_rejects_identical_languages(window, monkeypatch):
     window.provider_combo.setCurrentIndex(window.provider_combo.findData("ollama"))
     window.model_combo.setCurrentText("qwen2.5:1.5b")
+    # The normal UI rejects an identical pair immediately and restores the
+    # previous selection. Block signals to exercise the probe's defensive guard
+    # against an invalid/stale control state.
+    window.source_combo.blockSignals(True)
+    window.target_combo.blockSignals(True)
     window.source_combo.setCurrentIndex(window.source_combo.findData("ja"))
     window.target_combo.setCurrentIndex(window.target_combo.findData("ja"))
+    window.source_combo.blockSignals(False)
+    window.target_combo.blockSignals(False)
     calls = []
     monkeypatch.setattr(window, "job", lambda *args, **kwargs: calls.append(True))
 

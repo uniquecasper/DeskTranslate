@@ -847,6 +847,52 @@ def test_local_model_probe_preserves_configured_local_endpoint(window, monkeypat
     assert snapshots[0].provider_endpoints["ollama"] == "http://127.0.0.1:11435"
 
 
+
+def test_local_model_probe_executes_with_lm_studio(window, monkeypatch):
+    from desktranslate.models import TranslationResult
+
+    window.source_combo.setCurrentIndex(window.source_combo.findData("ja"))
+    window.target_combo.setCurrentIndex(window.target_combo.findData("en"))
+    window.provider_combo.setCurrentIndex(window.provider_combo.findData("lmstudio"))
+    window.model_combo.setCurrentText("qwen2.5:1.5b")
+    requests = []
+    closed = []
+
+    class FakeProvider:
+        def translate(self, request):
+            requests.append(request)
+            return TranslationResult("We will meet here again tomorrow.")
+
+        def close(self):
+            closed.append(True)
+
+    provider = FakeProvider()
+    snapshots = []
+    monkeypatch.setattr(
+        window,
+        "provider_factory",
+        lambda snapshot: snapshots.append(snapshot) or (lambda: provider),
+    )
+
+    def run_inline(operation, callback):
+        try:
+            callback(operation(), "")
+        except Exception as error:
+            callback(None, str(error))
+
+    monkeypatch.setattr(window, "job", run_inline)
+
+    window.test_local_model()
+
+    assert len(requests) == 1
+    assert requests[0].source == "ja"
+    assert requests[0].target == "en"
+    assert requests[0].model == "qwen2.5:1.5b"
+    assert snapshots[0].provider == "lmstudio"
+    assert snapshots[0].endpoint == "http://localhost:1234/v1"
+    assert closed == [True]
+    assert "Generation succeeded" in window.provider_status.text()
+
 def test_local_model_probe_rejects_identical_languages(window, monkeypatch):
     window.provider_combo.setCurrentIndex(window.provider_combo.findData("ollama"))
     window.model_combo.setCurrentText("qwen2.5:1.5b")

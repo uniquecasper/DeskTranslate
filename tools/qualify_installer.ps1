@@ -1,4 +1,4 @@
-param([string]$PreviousInstaller = '', [switch]$Signed, [string]$OcrFixture = '', [string]$ModelDataDirectory = '', [switch]$AllowInstallChanges)
+param([string]$PreviousInstaller = '', [Parameter(Mandatory=$true)][string]$PreviousVersion, [Parameter(Mandatory=$true)][string]$ExpectedPreviousInstallerSha256, [switch]$Signed, [string]$OcrFixture = '', [string]$ModelDataDirectory = '', [switch]$AllowInstallChanges)
 $ErrorActionPreference = 'Stop'
 if (-not $AllowInstallChanges) {
     throw 'MANUAL INSTALLER QUALIFICATION: changes program files, shortcuts and per-user registration. Excluded from routine validation. Use -AllowInstallChanges only in a dedicated test account/VM.'
@@ -35,13 +35,14 @@ $workspace = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $version = (& python -c 'from desktranslate import __version__; print(__version__)').Trim()
 if ($LASTEXITCODE) { throw 'Canonical version lookup failed' }
 $setup = Join-Path $workspace "dist/DeskTranslate-$version-Setup-x64.exe"
-$expectedPreviousVersion = '2.1.0'
-$expectedPreviousInstallerSha256 = '9cce443bf825a9ef986d0846b5be30ac188743cd28137465784f29cabb5312d7'
-if (-not $PreviousInstaller) { throw 'A verified DeskTranslate 2.1.0 installer is required for 2.2.0 qualification' }
+if ($PreviousVersion -notmatch '^[0-9]+\.[0-9]+\.[0-9]+$') { throw 'Previous installer version must use canonical semantic version form' }
+if ($ExpectedPreviousInstallerSha256 -notmatch '^[0-9a-fA-F]{64}$') { throw 'Expected previous installer SHA-256 must contain exactly 64 hexadecimal characters' }
+$expectedPreviousVersion = $PreviousVersion
+if (-not $PreviousInstaller) { throw "A verified DeskTranslate $expectedPreviousVersion installer is required for upgrade qualification" }
 $PreviousInstaller = [IO.Path]::GetFullPath($PreviousInstaller)
 if (-not (Test-Path -LiteralPath $PreviousInstaller -PathType Leaf)) { throw 'Previous installer file is missing' }
 $actualPreviousInstallerSha256 = (Get-FileHash -LiteralPath $PreviousInstaller -Algorithm SHA256).Hash.ToLowerInvariant()
-if ($actualPreviousInstallerSha256 -ne $expectedPreviousInstallerSha256) { throw 'Previous installer SHA-256 does not match the official v2.1.0 release asset' }
+if ($actualPreviousInstallerSha256 -ne $ExpectedPreviousInstallerSha256.ToLowerInvariant()) { throw "Previous installer SHA-256 does not match the official v$expectedPreviousVersion release asset" }
 $installRoot = [IO.Path]::GetFullPath((Join-Path $workspace '.audit/installer qualification/翻訳 app'))
 $dataRoot = [IO.Path]::GetFullPath((Join-Path $workspace '.audit/installer qualification/設定 data'))
 $workingRoot = [IO.Path]::GetFullPath((Join-Path $workspace '.audit/installer qualification/空の 作業'))

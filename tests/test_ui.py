@@ -848,10 +848,14 @@ def test_local_model_probe_rejects_identical_languages(window, monkeypatch):
     # against an invalid/stale control state.
     window.source_combo.blockSignals(True)
     window.target_combo.blockSignals(True)
-    window.source_combo.setCurrentIndex(window.source_combo.findData("ja"))
-    window.target_combo.setCurrentIndex(window.target_combo.findData("ja"))
+    # English is present in both the managed OCR source list and target list.
+    # Use it to create a valid, identical pair in the defensive guard test.
+    window.source_combo.setCurrentIndex(window.source_combo.findData("en"))
+    window.target_combo.setCurrentIndex(window.target_combo.findData("en"))
     window.source_combo.blockSignals(False)
     window.target_combo.blockSignals(False)
+    assert window.source_combo.currentData() == "en"
+    assert window.target_combo.currentData() == "en"
     calls = []
     monkeypatch.setattr(window, "job", lambda *args, **kwargs: calls.append(True))
 

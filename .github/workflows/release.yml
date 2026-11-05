@@ -76,13 +76,15 @@ jobs:
           $expected = '39ecb3bf1ed797ff2dbde8bc6b27dbc381a47dcdc52cfdf4839ae94e797d1869'
           if ($actual -ne $expected) { throw "Official v2.2.0 installer checksum mismatch: $actual" }
           "DESKTRANSLATE_PREVIOUS_INSTALLER=$previousInstaller" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          "DESKTRANSLATE_PREVIOUS_INSTALLER_VERSION=2.2.0" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          "DESKTRANSLATE_PREVIOUS_INSTALLER_SHA256=$expected" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
       - name: Qualify portable, installer upgrade, lifecycle and artifact privacy
         id: qualify_artifacts
         shell: pwsh
         run: |
           ./tools/qualify_portable.ps1 -ModelDataDirectory "$env:DESKTRANSLATE_DATA_DIR/models"
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          ./tools/qualify_installer.ps1 -PreviousInstaller $env:DESKTRANSLATE_PREVIOUS_INSTALLER -OcrFixture "$PWD/tests/fixtures/ja-game.png" -ModelDataDirectory "$env:DESKTRANSLATE_DATA_DIR/models" -AllowInstallChanges
+          ./tools/qualify_installer.ps1 -PreviousInstaller $env:DESKTRANSLATE_PREVIOUS_INSTALLER -PreviousVersion $env:DESKTRANSLATE_PREVIOUS_INSTALLER_VERSION -ExpectedPreviousInstallerSha256 $env:DESKTRANSLATE_PREVIOUS_INSTALLER_SHA256 -OcrFixture "$PWD/tests/fixtures/ja-game.png" -ModelDataDirectory "$env:DESKTRANSLATE_DATA_DIR/models" -AllowInstallChanges
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python tools/privacy_scan.py --artifacts --history --trust-local-build --output docs/privacy-scan.json
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
@@ -133,7 +135,7 @@ jobs:
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           ./tools/qualify_portable.ps1 -ModelDataDirectory "$env:DESKTRANSLATE_DATA_DIR/models"
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          ./tools/qualify_installer.ps1 -PreviousInstaller $env:DESKTRANSLATE_PREVIOUS_INSTALLER -OcrFixture "$PWD/tests/fixtures/ja-game.png" -ModelDataDirectory "$env:DESKTRANSLATE_DATA_DIR/models" -AllowInstallChanges
+          ./tools/qualify_installer.ps1 -PreviousInstaller $env:DESKTRANSLATE_PREVIOUS_INSTALLER -PreviousVersion $env:DESKTRANSLATE_PREVIOUS_INSTALLER_VERSION -ExpectedPreviousInstallerSha256 $env:DESKTRANSLATE_PREVIOUS_INSTALLER_SHA256 -OcrFixture "$PWD/tests/fixtures/ja-game.png" -ModelDataDirectory "$env:DESKTRANSLATE_DATA_DIR/models" -AllowInstallChanges
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python tools/privacy_scan.py --artifacts --history --trust-local-build --output docs/privacy-scan.json
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
